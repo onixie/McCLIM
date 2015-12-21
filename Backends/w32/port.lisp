@@ -20,17 +20,29 @@
 (in-package :clim-w32)
 
 (defclass w32-pointer (standard-pointer)
-  ((cursor :accessor pointer-cursor :initform :upper-left)
-   (x :initform 0)
-   (y :initform 0)))
+  ((cursor :initform :upper-left
+	   :accessor pointer-cursor )
+   (x :initform 0
+      :accessor w32-pointer-x)
+   (y :initform 0
+      :accessor w32-pointer-y)))
 
 (defclass w32-port (basic-port)
-  ((id)
-   (pointer :accessor port-pointer :initform (make-instance 'w32-pointer))
-   (window :initform nil :accessor w32-port-window)))
+  ((desktop :initform nil
+	    :accessor w32-port-desktop)
+   (monitor :initform nil
+	    :accessor w32-port-monitor)
+   (pointer :accessor w32-port-pointer
+	    :initform (make-instance 'w32-pointer))
+   (window  :initform nil
+	    :accessor w32-port-window)))
 
 (defun parse-w32-server-path (path)
-  path)
+  (pop path)
+  (let ((default '(:desktop "Default" :monitor 0)))
+    (list :w32
+	  :desktop (getf path :desktop (getf default :desktop))
+	  :monitor (getf path :monitor (getf default :monitor)))))
 
 ;;; FIXME: if :port-type and :server-path-parser aren't CLIM-specified
 ;;; keywords, they should be altered to be in some mcclim-internal
@@ -40,64 +52,109 @@
 
 (defmethod initialize-instance :after ((port w32-port) &rest initargs)
   (declare (ignore initargs))
-  (setf (slot-value port 'id) (gensym "W32-PORT-"))
-  ;; FIXME: it seems bizarre for this to be necessary
+  (let ((path (cdr (port-server-path port))))
+    (setf (w32-port-desktop port)
+	  (or (w32api:open-desktop (getf path :desktop))
+	      (w32api:create-desktop (getf path :desktop))))
+    (w32api:switch-desktop (w32-port-desktop port))
+    (setf (w32-port-monitor port)
+	  (nth (getf path :monitor) (w32api:get-all-monitors)))
+    (setf (w32-port-window port)
+	  (w32api:get-desktop-window))
+    (setf (w32-port-pointer port)
+	  (make-instance 'w32-pointer :port port)))
+
   (push (make-instance 'w32-frame-manager :port port)
 	(slot-value port 'climi::frame-managers)))
 
-(defmethod print-object ((object w32-port) stream)
-  (print-unreadable-object (object stream :identity t :type t)
-    (format stream "~S ~S" :id (slot-value object 'id))))
+(defmethod print-object ((port w32-port) stream)
+  (print-unreadable-object (port stream :identity t :type t)
+    (format stream "~S ~S ~S ~S"
+	    :desktop (w32api:get-desktop-name (w32-port-desktop port))
+	    :monitor (w32api:get-monitor-name (w32-port-monitor port)))))
 
 (defmethod port-set-mirror-region ((port w32-port) mirror mirror-region)
-  ())
+  (multiple-value-bind (x y width height)
+      (w32api:get-window-rectangle mirror)
+    (declare (ignore width height))
+    (w32api:move-window mirror
+			x
+			y
+			(floor (bounding-rectangle-max-x mirror-region))
+			(floor (bounding-rectangle-max-y mirror-region)))))
                                    
-(defmethod port-set-mirror-transformation
-    ((port w32-port) mirror mirror-transformation)
-  ())
+(defmethod port-set-mirror-transformation ((port w32-port) mirror mirror-transformation)
+  (multiple-value-bind (x y width height)
+      (w32api:get-window-rectangle mirror)
+    (declare (ignore x y))
+    (w32api:move-window mirror
+			(floor (nth-value 0 (transform-position mirror-transformation 0 0)))
+			(floor (nth-value 1 (transform-position mirror-transformation 0 0)))
+			width
+			height)))
 
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
   nil)
 
+(defmethod realize-mirror ((port w32-port) (sheet climi::top-level-sheet-pane))
+  (let ((window (w32api:create-window (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port))))
+    (climi::port-register-mirror (port sheet) sheet window)
+    (climi::port-lookup-mirror port sheet)))
+
 (defmethod destroy-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
-  ())
+  (when (climi::port-lookup-mirror port sheet)
+    (w32api:destroy-window (climi::port-lookup-mirror port sheet))
+    (climi::port-unregister-mirror port sheet (sheet-mirror sheet))))
+
+(defmethod raise-mirror ((port w32-port) (sheet basic-sheet))
+  (let ((mirror (sheet-mirror sheet)))
+    (when (w32api:window-p mirror)
+      ;(w32api:raise-window mirror)
+      )))
+
+(defmethod bury-mirror ((port w32-port) (sheet basic-sheet))
+  (let ((mirror (sheet-mirror sheet)))
+    (when (w32api:window-p mirror)
+      ;(w32api:bury-window mirror)
+      )))
 
 (defmethod mirror-transformation ((port w32-port) mirror)
-  ())
-
+  (multiple-value-bind (x y)
+      (w32api:get-window-rectangle mirror)
+    (make-translation-transformation x y)))
 
 (defmethod port-set-sheet-region ((port w32-port) (graft graft) region)
-  ())
+  (declare (ignore region))
+  nil)
 
-;; these don't exist
-;;;(defmethod port-set-sheet-transformation
-;;;    ((port w32-port) (graft graft) transformation)
-;;;  ())
-;;;
-;;;(defmethod port-set-sheet-transformation
-;;;    ((port w32-port) (sheet mirrored-sheet-mixin) transformation)
-;;;  ())
+(defmethod port-set-sheet-transformation ((port w32-port) (graft graft) transformation)
+  (declare (ignore transformation))
+  nil)
 
-(defmethod port-set-sheet-region
-    ((port w32-port) (sheet mirrored-sheet-mixin) region)
+(defmethod port-set-sheet-transformation ((port w32-port) (sheet mirrored-sheet-mixin) transformation)
+  (declare (ignore transformation))
+  nil)
+
+(defmethod port-set-sheet-region ((port w32-port) (sheet mirrored-sheet-mixin) region)
   (declare (ignore region))
   nil)
 
 (defmethod port-enable-sheet ((port w32-port) (mirror mirrored-sheet-mixin))
-  nil)
+  (w32api:show-window mirror))
 
 (defmethod port-disable-sheet ((port w32-port) (mirror mirrored-sheet-mixin))
-  nil)
+  (w32api:hide-window mirror))
 
 (defmethod destroy-port :before ((port w32-port))
-  nil)
+  (w32api:switch-desktop (w32api:get-default-desktop))
+  (w32api:destroy-desktop port))
 
-(defmethod port-motion-hints ((port w32-port) (mirror mirrored-sheet-mixin))
-  nil)
+;; (defmethod port-motion-hints ((port w32-port) (mirror mirrored-sheet-mixin))
+;;   nil)
 
-(defmethod (setf port-motion-hints)
-    (value (port w32-port) (sheet mirrored-sheet-mixin))
-  value)
+;; (defmethod (setf port-motion-hints)
+;;     (value (port w32-port) (sheet mirrored-sheet-mixin))
+;;   value)
 
 (defmethod get-next-event
     ((port w32-port) &key wait-function (timeout nil))
@@ -106,9 +163,15 @@
 
 (defmethod make-graft
     ((port w32-port) &key (orientation :default) (units :device))
-  (make-instance 'w32-graft
-                 :port port :mirror (gensym)
-                 :orientation orientation :units units))
+  (let ((graft (make-instance 'w32-graft
+			:port port :mirror (w32-port-window port)
+			:orientation orientation :units units)))
+    (multiple-value-bind (x y width height)
+	(w32api:get-window-rectangle (w32-port-window port))
+      (setf (sheet-region graft)
+	    (make-bounding-rectangle x y width height)))
+    (push graft (climi::port-grafts port))
+    graft))
 
 (defmethod make-medium ((port w32-port) sheet)
   (make-instance 'w32-medium :sheet sheet))
@@ -133,12 +196,18 @@
   nil)
 
 (defmethod port-mirror-width ((port w32-port) sheet)
-  (declare (ignore sheet))
-  nil)
+  (let ((mirror (climi::port-lookup-mirror port sheet)))
+    (multiple-value-bind (x y width height)
+	(w32api:get-window-rectangle mirror)
+      (declare (ignore x y height))
+      width)))
 
 (defmethod port-mirror-height ((port w32-port) sheet)
-  (declare (ignore sheet))
-  nil)
+  (let ((mirror (climi::port-lookup-mirror port sheet)))
+    (multiple-value-bind (x y width height)
+	(w32api:get-window-rectangle mirror)
+      (declare (ignore x y width))
+      height)))
 
 (defmethod graft ((port w32-port))
   (first (climi::port-grafts port)))
@@ -155,7 +224,7 @@
     (destroy-mirror port pixmap)))
 
 (defmethod pointer-position ((pointer w32-pointer))
-  (values (slot-value pointer 'x) (slot-value pointer 'y)))
+  (values (w32-pointer-x pointer) (w32-pointer-y pointer)))
 
 (defmethod pointer-button-state ((pointer w32-pointer))
   nil)

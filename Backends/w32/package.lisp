@@ -3,4 +3,4 @@
 (in-package :common-lisp-user)
 
 (defpackage :clim-w32
-  (:use :clim :clim-lisp :clim-backend))
+  (:use :clim :clim-lisp :clim-backend :clim-internals))

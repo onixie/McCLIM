@@ -22,10 +22,32 @@
 (defclass w32-frame-manager (frame-manager)
   ())
 
+;;; This is an example of how make-pane-1 might create specialized instances of the
+;;; generic pane types based upon the type of the frame-manager. Unlike in the CLX
+;;; case, we *do* expect there to be W32 specific panes (eventually!).
 (defmethod make-pane-1 ((fm w32-frame-manager) (frame application-frame) type &rest initargs)
-  (apply #'make-instance 'to-be-implement;(generic-concrete-pane-class type)
-	 :frame frame :manager fm :port (port frame)
+  (apply #'make-instance
+	 (or (find-symbol (concatenate 'string
+				       (symbol-name '#:w32-)
+				       (symbol-name type))
+			  :clim-w32)
+	     (find-symbol (concatenate 'string
+				       (symbol-name '#:w32-)
+				       (symbol-name type)
+				       (symbol-name '#:-pane))
+			  :clim-w32)
+	     (find-symbol (concatenate 'string
+				       (symbol-name type)
+				       (symbol-name '#:-pane))
+			  :climi)
+	     type)
+	 :frame frame
+	 :manager fm
+	 :port (port frame)
 	 initargs))
 
 (defmethod adopt-frame :after ((fm w32-frame-manager) (frame application-frame))
-  ())
+  (let* ((sheet (frame-top-level-sheet frame))
+	 (mirror (sheet-direct-mirror sheet)))
+    (when (sheet-enabled-p sheet)
+      (w32api:show-window mirror))))
