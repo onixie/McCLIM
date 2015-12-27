@@ -20,7 +20,10 @@
 (in-package :clim-w32)
 
 (defclass w32-medium (basic-medium)
-  ((buffering-output-p :accessor medium-buffering-output-p)))
+  ((dc :initform nil
+       :accessor w32-medium-dc))
+  ;((buffering-output-p :accessor medium-buffering-output-p))
+  )
 
 (defmethod (setf medium-text-style) :before (text-style (medium w32-medium))
   (declare (ignore text-style))
@@ -73,29 +76,29 @@
   nil)
 
 (defmethod medium-draw-line* ((medium w32-medium) x1 y1 x2 y2)
-  (declare (ignore x1 y1 x2 y2)) 
-  nil)
+  (let ((dc (w32-medium-dc medium)))
+    (w32api.gdi32::MoveToEx dc x1 y1 (cffi:null-pointer))
+    (w32api.gdi32::LineTo dc x2 y2)))
 
 ;; FIXME: Invert the transformation and apply it here, as the :around
 ;; methods on transform-coordinates-mixin will cause it to be applied
 ;; twice, and we need to undo one of those. The
 ;; transform-coordinates-mixin stuff needs to be eliminated.
 (defmethod medium-draw-lines* ((medium w32-medium) coord-seq)
-  (let ((tr (invert-transformation (medium-transformation medium))))
-    (declare (ignore tr))
-    nil))
+  (climi::do-sequence ((x1 y1 x2 y2) coord-seq)
+    (medium-draw-line* medium x1 y1 x2 y2)))
 
 (defmethod medium-draw-polygon* ((medium w32-medium) coord-seq closed filled)
   (declare (ignore coord-seq closed filled))
   nil)
 
 (defmethod medium-draw-rectangle* ((medium w32-medium) left top right bottom filled)
-  (declare (ignore left top right bottom filled))
-  nil)
+  (declare (ignore filled))
+  (w32api.gdi32::Rectangle (w32-medium-dc medium) left top right bottom))
 
 (defmethod medium-draw-rectangles* ((medium w32-medium) position-seq filled)
-  (declare (ignore position-seq filled))
-  nil)
+  (loop for (left top right bottom) on position-seq by #'cddddr
+     do (medium-draw-rectangle* medium left top right bottom filled)))
 
 (defmethod medium-draw-ellipse* ((medium w32-medium) center-x center-y
 				 radius-1-dx radius-1-dy
@@ -163,11 +166,10 @@
                               start end
                               align-x align-y
                               toward-x toward-y transform-glyphs)
-  (declare (ignore string x y
-		   start end
+  (declare (ignore start end
 		   align-x align-y
 		   toward-x toward-y transform-glyphs))
-  nil)
+  (w32api.gdi32::TextOutW (w32-medium-dc medium) x y string (length string)))
 
 #+nil
 (defmethod medium-buffering-output-p ((medium w32-medium))

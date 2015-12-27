@@ -35,7 +35,9 @@
    (pointer :accessor w32-port-pointer
 	    :initform (make-instance 'w32-pointer))
    (window  :initform nil
-	    :accessor w32-port-window)))
+	    :accessor w32-port-window)
+   (events  :initform nil
+	    :accessor w32-port-events)))
 
 (defun parse-w32-server-path (path)
   (pop path)
@@ -74,32 +76,93 @@
 	    :monitor (w32api:get-monitor-name (w32-port-monitor port)))))
 
 (defmethod port-set-mirror-region ((port w32-port) mirror mirror-region)
-  (multiple-value-bind (x y width height)
-      (w32api:get-window-rectangle mirror)
-    (declare (ignore width height))
-    (w32api:move-window mirror
-			x
-			y
+  (w32api:resize-window mirror
 			(floor (bounding-rectangle-max-x mirror-region))
-			(floor (bounding-rectangle-max-y mirror-region)))))
-                                   
+			(floor (bounding-rectangle-max-y mirror-region))))
+
 (defmethod port-set-mirror-transformation ((port w32-port) mirror mirror-transformation)
-  (multiple-value-bind (x y width height)
-      (w32api:get-window-rectangle mirror)
-    (declare (ignore x y))
-    (w32api:move-window mirror
-			(floor (nth-value 0 (transform-position mirror-transformation 0 0)))
-			(floor (nth-value 1 (transform-position mirror-transformation 0 0)))
-			width
-			height)))
+  (w32api:move-window mirror
+		      (floor (nth-value 0 (transform-position mirror-transformation 0 0)))
+		      (floor (nth-value 1 (transform-position mirror-transformation 0 0)))))
+
+(declaim (inline round-coordinate))
+(defun round-coordinate (x)
+  "Function used for rounding coordinates."
+  ;; We use "mercantile rounding", instead of the CL round to nearest
+  ;; even number, when in doubt.
+  ;;
+  ;; Reason: As the CLIM drawing model is specified, you quite often
+  ;; want to operate with coordinates, which are multiples of 1/2. 
+  ;; Using CL:ROUND gives you "random" results. Using "mercantile
+  ;; rounding" gives you consistent results.
+  ;;
+  ;; Note that CLIM defines pixel coordinates to be at the corners,
+  ;; while in X11 they are at the centers. We don't do much about the
+  ;; discrepancy, but rounding up at half pixel boundaries seems to
+  ;; work well.
+  (floor (+ x .5)))
+
+(defmethod sheet-mirrored-ancestor ((sheet basic-sheet))
+  (unless sheet
+    (sheet-mirrored-ancestor (sheet-parent sheet))))
+
+(defun realize-mirror-aux (port sheet &rest args)
+  (when (null (climi::port-lookup-mirror port sheet))
+    (climi::update-mirror-geometry sheet)
+    (let* ((name (first args))
+	   (args (rest  args))
+	   (window (apply #'w32api:create-window name
+			  :x (if (climi::%sheet-mirror-transformation sheet)
+				 (round-coordinate (nth-value 0 (transform-position
+								 (climi::%sheet-mirror-transformation sheet)
+								 0 0)))
+				 (getf args :x))
+			  :y (if (climi::%sheet-mirror-transformation sheet)
+				 (round-coordinate (nth-value 1 (transform-position
+								 (climi::%sheet-mirror-transformation sheet)
+								 0 0)))
+				 (getf args :y))
+
+			  :width (if (climi::%sheet-mirror-region sheet)
+				     (round-coordinate (climi::bounding-rectangle-width (climi::%sheet-mirror-region sheet)))
+				     (getf args :width))
+			  :height (if (climi::%sheet-mirror-region sheet)
+				      (round-coordinate (climi::bounding-rectangle-height (climi::%sheet-mirror-region sheet)))
+				      (getf args :height))
+			  args)))
+      (climi::port-register-mirror (port sheet) sheet window)
+      (when (getf args :show-p)
+        (w32api:show-window window))
+      (w32api:message-handler+
+       window :WM_PAINT
+       (w32api::proc
+	 (multiple-value-bind (x1 y1 x2 y2)
+	     (w32api:get-update-rectangle window)
+	   (push (make-instance 'climi::window-repaint-event
+			   :sheet sheet
+			   :region (make-rectangle* x1 y1 x2 y2)
+			   :timestamp (get-universal-time))
+		 (w32-port-events port)))))
+      (w32api:message-handler+
+       window :WM_DESTROY
+       (w32api::proc
+	 (push (make-instance 'climi::window-destroy-event
+			      :sheet sheet)
+	       (w32-port-events port))))))
+  (climi::port-lookup-mirror port sheet))
 
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
-  nil)
+  (realize-mirror-aux port sheet (format nil "~a" sheet)
+		      :show-p t
+		      :desktop (w32-port-desktop port)
+		      :parent  (sheet-mirror (sheet-mirrored-ancestor (sheet-parent sheet)))))
+
+(defmethod realize-mirror :after ((port w32-port) (sheet sheet-with-medium-mixin))
+  (let ((window (sheet-mirror sheet)))
+    (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window :full t))))
 
 (defmethod realize-mirror ((port w32-port) (sheet climi::top-level-sheet-pane))
-  (let ((window (w32api:create-window (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port))))
-    (climi::port-register-mirror (port sheet) sheet window)
-    (climi::port-lookup-mirror port sheet)))
+  (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port)))
 
 (defmethod destroy-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
   (when (climi::port-lookup-mirror port sheet)
@@ -107,16 +170,16 @@
     (climi::port-unregister-mirror port sheet (sheet-mirror sheet))))
 
 (defmethod raise-mirror ((port w32-port) (sheet basic-sheet))
-  (let ((mirror (sheet-mirror sheet)))
-    (when (w32api:window-p mirror)
-      ;(w32api:raise-window mirror)
-      )))
+  (declare (ignore port sheet)))
+
+(defmethod raise-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
+  (w32api:raise-window (sheet-mirror sheet)))
 
 (defmethod bury-mirror ((port w32-port) (sheet basic-sheet))
-  (let ((mirror (sheet-mirror sheet)))
-    (when (w32api:window-p mirror)
-      ;(w32api:bury-window mirror)
-      )))
+  (declare (ignore port sheet)))
+
+(defmethod bury-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
+  (w32api:bury-window  (sheet-mirror sheet)))
 
 (defmethod mirror-transformation ((port w32-port) mirror)
   (multiple-value-bind (x y)
@@ -124,12 +187,10 @@
     (make-translation-transformation x y)))
 
 (defmethod port-set-sheet-region ((port w32-port) (graft graft) region)
-  (declare (ignore region))
-  nil)
+  (declare (ignore region)))
 
 (defmethod port-set-sheet-transformation ((port w32-port) (graft graft) transformation)
-  (declare (ignore transformation))
-  nil)
+  (declare (ignore transformation)))
 
 (defmethod port-set-sheet-transformation ((port w32-port) (sheet mirrored-sheet-mixin) transformation)
   (declare (ignore transformation))
@@ -159,13 +220,13 @@
 (defmethod get-next-event
     ((port w32-port) &key wait-function (timeout nil))
   (declare (ignore wait-function timeout))
-  nil)
+  (pop (w32-port-events port)))
 
 (defmethod make-graft
     ((port w32-port) &key (orientation :default) (units :device))
   (let ((graft (make-instance 'w32-graft
-			:port port :mirror (w32-port-window port)
-			:orientation orientation :units units)))
+			      :port port :mirror (w32-port-window port)
+			      :orientation orientation :units units)))
     (multiple-value-bind (x y width height)
 	(w32api:get-window-rectangle (w32-port-window port))
       (setf (sheet-region graft)
@@ -183,7 +244,7 @@
 
 (defmethod (setf text-style-mapping)
     (font-name (port w32-port)
-    (text-style text-style) &optional character-set)
+     (text-style text-style) &optional character-set)
   (declare (ignore font-name text-style character-set))
   nil)
 

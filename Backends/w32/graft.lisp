@@ -24,8 +24,15 @@
 
 (defmethod graft-width ((graft w32-graft) &key (units :device))
   (declare (ignore units))
-  nil)
+  (multiple-value-bind (width height)
+      (w32api:get-window-size (w32api:get-desktop-window))
+    (declare (ignore height))
+    width)
+  ) 
 
 (defmethod graft-height ((graft w32-graft) &key (units :device))
   (declare (ignore units))
-  nil)
+  (multiple-value-bind (width height)
+      (w32api:get-window-size (w32api:get-desktop-window))
+    (declare (ignore width))
+    height))
