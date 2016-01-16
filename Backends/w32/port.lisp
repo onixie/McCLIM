@@ -67,7 +67,17 @@
 	  (make-instance 'w32-pointer :port port)))
 
   (push (make-instance 'w32-frame-manager :port port)
-	(slot-value port 'climi::frame-managers)))
+	(slot-value port 'climi::frame-managers))
+  (when climi::*multiprocessing-p*
+    (let ((stdout *standard-output*))
+      (setf (climi::port-event-process port)
+	    (climi::make-process
+	     (lambda ()
+	       (let ((*standard-output* stdout))
+		 (loop
+		    (with-simple-restart (restart-event-loop "Restart CLIM's event loop.")
+		      (loop (process-next-event port))))))
+	     :name (format nil "~S's event process." port))))))
 
 (defmethod print-object ((port w32-port) stream)
   (print-unreadable-object (port stream :identity t :type t)
@@ -139,9 +149,9 @@
 	 (multiple-value-bind (x1 y1 x2 y2)
 	     (w32api:get-update-rectangle window)
 	   (push (make-instance 'climi::window-repaint-event
-			   :sheet sheet
-			   :region (make-rectangle* x1 y1 x2 y2)
-			   :timestamp (get-universal-time))
+				:sheet sheet
+				:region (make-rectangle* x1 y1 x2 y2)
+				:timestamp (get-universal-time))
 		 (w32-port-events port)))))
       (w32api:message-handler+
        window :WM_DESTROY
@@ -323,7 +333,7 @@
 
 (defmethod distribute-event :around ((port w32-port) event)
   (declare (ignore event))
-  nil)
+  (call-next-method))
 
 (defmethod set-sheet-pointer-cursor ((port w32-port) sheet cursor)
   (declare (ignore sheet cursor))
