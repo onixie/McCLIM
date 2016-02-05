@@ -154,6 +154,20 @@
 				:timestamp (get-universal-time))
 		 (w32-port-events port)))))
       (w32api:message-handler+
+       window :WM_CHAR
+       (lambda (hWnd Msg wParam lParam)
+	 (declare (ignore hWnd Msg))
+	 (push (print (make-instance (if (w32api:key-pressed-p lParam)
+				   'pointer-button-press-event
+				   'pointer-button-release-event)
+			       :pointer 0
+			       :button (w32api:get-key-character wParam) :x 0 :y 0
+			       :graft-x 0
+			       :graft-y 0
+			       :sheet sheet :modifier-state (w32api:alt-key-p lParam)
+			       :timestamp (get-universal-time)))
+	       (w32-port-events port))))
+      (w32api:message-handler+
        window :WM_DESTROY
        (w32api::proc
 	 (push (make-instance 'climi::window-destroy-event
@@ -164,6 +178,8 @@
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
   (realize-mirror-aux port sheet (format nil "~a" sheet)
 		      :show-p t
+		      :style nil
+		      :extended-style nil
 		      :desktop (w32-port-desktop port)
 		      :parent  (sheet-mirror (sheet-mirrored-ancestor (sheet-parent sheet)))))
 
