@@ -116,6 +116,12 @@
   (unless sheet
     (sheet-mirrored-ancestor (sheet-parent sheet))))
 
+(defun get-modifier-state ()
+  (print (logior
+	  (if (w32api::shift-pressed-p) +shift-key+ 0)
+	  (if (w32api::ctrl-pressed-p) +control-key+ 0)
+	  (if (w32api::alt-pressed-p) +meta-key+ 0))))
+
 (defun realize-mirror-aux (port sheet &rest args)
   (when (null (climi::port-lookup-mirror port sheet))
     (climi::update-mirror-geometry sheet)
@@ -154,19 +160,53 @@
 				:timestamp (get-universal-time))
 		 (w32-port-events port)))))
       (w32api:message-handler+
+       window :WM_LBUTTONDOWN
+       (lambda (hWnd Msg wParam lParam)
+	 (declare (ignore hWnd Msg))
+	 (push (make-instance 'pointer-button-press-event
+			      :pointer 0
+			      :button +pointer-left-button+
+			      :x (w32api::get-cursor-x lParam)
+			      :y (w32api::get-cursor-y lParam)
+			      :graft-x 0
+			      :graft-y 0
+			      :sheet sheet
+			      :modifier-state (get-modifier-state)
+			      :timestamp (get-universal-time))
+	       (w32-port-events port))))
+      (w32api:message-handler+
+       window :WM_LBUTTONUP
+       (lambda (hWnd Msg wParam lParam)
+	 (declare (ignore hWnd Msg))
+	 (push (make-instance 'pointer-button-release-event
+			      :pointer 0
+			      :button +pointer-left-button+
+			      :x (w32api::get-cursor-x lParam)
+			      :y (w32api::get-cursor-y lParam)
+			      :graft-x 0
+			      :graft-y 0
+			      :sheet sheet
+			      :modifier-state (get-modifier-state)
+			      :timestamp (get-universal-time))
+	       (w32-port-events port))))
+      (w32api:message-handler+
        window :WM_CHAR
        (lambda (hWnd Msg wParam lParam)
 	 (declare (ignore hWnd Msg))
-	 (push (print (make-instance (if (w32api:key-pressed-p lParam)
-				   'pointer-button-press-event
-				   'pointer-button-release-event)
-			       :pointer 0
-			       :button (w32api:get-key-character wParam) :x 0 :y 0
-			       :graft-x 0
-			       :graft-y 0
-			       :sheet sheet :modifier-state (w32api:alt-key-p lParam)
-			       :timestamp (get-universal-time)))
-	       (w32-port-events port))))
+	 (let ((keyname (w32api:get-key-character wParam)))
+	   (push (make-instance (if (w32api:key-pressed-p lParam)
+				    'key-press-event
+				    'key-release-event)
+				:key-name keyname
+				:key-character (and (characterp keyname) keyname)
+				:x 0
+				:y 0
+				:graft-x 0
+				:graft-y 0
+				:sheet (or (frame-properties (pane-frame sheet) 'focus) sheet)
+				:modifier-state (get-modifier-state)
+				:timestamp (get-universal-time))
+		 (w32-port-events port)))))
       (w32api:message-handler+
        window :WM_DESTROY
        (w32api::proc
@@ -329,12 +369,6 @@
     (focus (port w32-port) frame)
   (setf (frame-properties frame 'focus) focus))
 
-(defmethod (setf port-keyboard-input-focus) (focus (port w32-port))
-  focus)
-
-(defmethod port-keyboard-input-focus ((port w32-port))
-  nil)
-
 (defmethod port-force-output ((port w32-port))
   nil)
 
@@ -374,3 +408,6 @@
 (defmethod send-selection ((port w32-port) event string)
   (declare (ignore event string))
   nil)
+
+(defmethod port-pointer ((port w32-port))
+  (w32-port-pointer port))
