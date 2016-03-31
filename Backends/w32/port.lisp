@@ -54,6 +54,7 @@
 
 (defmethod initialize-instance :after ((port w32-port) &rest initargs)
   (declare (ignore initargs))
+  (setf (w32-port-events port) (make-instance 'climi::port-event-queue :port port))
   (let ((path (cdr (port-server-path port))))
     (setf (w32-port-desktop port)
 	  (or (w32api:open-desktop (getf path :desktop))
@@ -154,65 +155,65 @@
        (w32api::proc
 	 (multiple-value-bind (x1 y1 x2 y2)
 	     (w32api:get-update-rectangle window)
-	   (push (make-instance 'climi::window-repaint-event
-				:sheet sheet
-				:region (make-rectangle* x1 y1 x2 y2)
-				:timestamp (get-universal-time))
-		 (w32-port-events port)))))
+	   (climi::event-queue-append (w32-port-events port)
+				      (make-instance 'climi::window-repaint-event
+						     :sheet sheet
+						     :region (make-rectangle* x1 y1 x2 y2)
+						     :timestamp (get-universal-time))))))
       (w32api:message-handler+
        window :WM_LBUTTONDOWN
        (lambda (hWnd Msg wParam lParam)
 	 (declare (ignore hWnd Msg))
-	 (push (make-instance 'pointer-button-press-event
-			      :pointer 0
-			      :button +pointer-left-button+
-			      :x (w32api::get-cursor-x lParam)
-			      :y (w32api::get-cursor-y lParam)
-			      :graft-x 0
-			      :graft-y 0
-			      :sheet sheet
-			      :modifier-state (get-modifier-state)
-			      :timestamp (get-universal-time))
-	       (w32-port-events port))))
+	 (climi::event-queue-append (w32-port-events port)
+				    (make-instance 'pointer-button-press-event
+						   :pointer 0
+						   :button +pointer-left-button+
+						   :x (w32api::get-cursor-x lParam)
+						   :y (w32api::get-cursor-y lParam)
+						   :graft-x 0
+						   :graft-y 0
+						   :sheet sheet
+						   :modifier-state (get-modifier-state)
+						   :timestamp (get-universal-time)))))
       (w32api:message-handler+
        window :WM_LBUTTONUP
        (lambda (hWnd Msg wParam lParam)
 	 (declare (ignore hWnd Msg))
-	 (push (make-instance 'pointer-button-release-event
-			      :pointer 0
-			      :button +pointer-left-button+
-			      :x (w32api::get-cursor-x lParam)
-			      :y (w32api::get-cursor-y lParam)
-			      :graft-x 0
-			      :graft-y 0
-			      :sheet sheet
-			      :modifier-state (get-modifier-state)
-			      :timestamp (get-universal-time))
-	       (w32-port-events port))))
+	 (climi::event-queue-append (w32-port-events port)
+				    (make-instance 'pointer-button-release-event
+						   :pointer 0
+						   :button +pointer-left-button+
+						   :x (w32api::get-cursor-x lParam)
+						   :y (w32api::get-cursor-y lParam)
+						   :graft-x 0
+						   :graft-y 0
+						   :sheet sheet
+						   :modifier-state (get-modifier-state)
+						   :timestamp (get-universal-time)))))
       (w32api:message-handler+
        window :WM_CHAR
        (lambda (hWnd Msg wParam lParam)
 	 (declare (ignore hWnd Msg))
 	 (let ((keyname (w32api:get-key-character wParam)))
-	   (push (make-instance (if (w32api:key-pressed-p lParam)
-				    'key-press-event
-				    'key-release-event)
-				:key-name keyname
-				:key-character (and (characterp keyname) keyname)
-				:x 0
-				:y 0
-				:graft-x 0
-				:graft-y 0
-				:sheet (or (frame-properties (pane-frame sheet) 'focus) sheet)
-				:modifier-state (get-modifier-state)
-				:timestamp (get-universal-time))
-		 (w32-port-events port)))))
+	   (climi::event-queue-append (w32-port-events port)
+				      (make-instance (if (w32api:key-pressed-p lParam)
+							 'key-press-event
+							 'key-release-event)
+						     :key-name keyname
+						     :key-character (and (characterp keyname) keyname)
+						     :x 0
+						     :y 0
+						     :graft-x 0
+						     :graft-y 0
+						     :sheet (or (frame-properties (pane-frame sheet) 'focus) sheet)
+						     :modifier-state (get-modifier-state)
+						     :timestamp (get-universal-time))))))
       (w32api:message-handler+
        window :WM_DESTROY
        (w32api::proc
-	 (push (make-instance 'climi::window-destroy-event
-			      :sheet sheet)
-	       (w32-port-events port))))))
+	 (climi::event-queue-append (w32-port-events port)
+				    (make-instance 'climi::window-destroy-event
+						   :sheet sheet))))))
   (climi::port-lookup-mirror port sheet))
 
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
@@ -286,7 +287,7 @@
 (defmethod get-next-event
     ((port w32-port) &key wait-function (timeout nil))
   (declare (ignore wait-function timeout))
-  (pop (w32-port-events port)))
+  (climi::event-queue-read (w32-port-events port)))
 
 (defmethod make-graft
     ((port w32-port) &key (orientation :default) (units :device))
