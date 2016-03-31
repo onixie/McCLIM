@@ -128,11 +128,11 @@
 
 (defmethod text-style-ascent (text-style (medium w32-medium))
   (declare (ignore text-style))
-  1)
+  (w32api::get-text-ascent (w32-medium-dc medium)))
 
 (defmethod text-style-descent (text-style (medium w32-medium))
   (declare (ignore text-style))
-  1)
+  (w32api::get-text-descent (w32-medium-dc medium)))
 
 (defmethod text-style-height (text-style (medium w32-medium))
   (+ (text-style-ascent text-style medium)
@@ -140,7 +140,7 @@
 
 (defmethod text-style-character-width (text-style (medium w32-medium) char)
   (declare (ignore text-style char))
-  1)
+  (w32api::get-text-char-width (w32-medium-dc medium)))
 
 ;;; FIXME: this one is nominally backend-independent
 (defmethod text-style-width (text-style (medium w32-medium))

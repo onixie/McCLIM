@@ -118,7 +118,7 @@
     (sheet-mirrored-ancestor (sheet-parent sheet))))
 
 (defun get-mouse-state (wParam)
-  (let ((modifier-keys (print (w32api::get-modifier-key wParam))))
+  (let ((modifier-keys (w32api::get-modifier-key wParam)))
     (values
      (cond ((member :MK_LBUTTON modifier-keys) +pointer-left-button+)
 	   ((member :MK_MBUTTON modifier-keys) +pointer-middle-button+)
