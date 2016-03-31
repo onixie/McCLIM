@@ -77,8 +77,8 @@
 
 (defmethod medium-draw-line* ((medium w32-medium) x1 y1 x2 y2)
   (let ((dc (w32-medium-dc medium)))
-    (w32api.gdi32::MoveToEx dc x1 y1 (cffi:null-pointer))
-    (w32api.gdi32::LineTo dc x2 y2)))
+    (w32api.gdi32::MoveToEx dc (round-coordinate x1) (round-coordinate y1) (cffi:null-pointer))
+    (w32api.gdi32::LineTo dc (round-coordinate x2) (round-coordinate y2))))
 
 ;; FIXME: Invert the transformation and apply it here, as the :around
 ;; methods on transform-coordinates-mixin will cause it to be applied
@@ -92,9 +92,9 @@
   (declare (ignore coord-seq closed filled))
   nil)
 
-(defmethod medium-draw-rectangle* ((medium w32-medium) left top right bottom filled)
+(defmethod medium-draw-rectangle* ((medium w32-medium) x1 y1 x2 y2 filled)
   (declare (ignore filled))
-  (w32api.gdi32::Rectangle (w32-medium-dc medium) left top right bottom))
+  (w32api.gdi32::Rectangle (w32-medium-dc medium) (round-coordinate x1) (round-coordinate y1) (round-coordinate x2) (round-coordinate y2)))
 
 (defmethod medium-draw-rectangles* ((medium w32-medium) position-seq filled)
   (loop for (left top right bottom) on position-seq by #'cddddr
@@ -104,18 +104,27 @@
 				 radius-1-dx radius-1-dy
 				 radius-2-dx radius-2-dy
 				 start-angle end-angle filled)
-  (declare (ignore center-x center-y
-		   radius-1-dx radius-1-dy
-		   radius-2-dx radius-2-dy
-		   start-angle end-angle filled))
-  nil)
+  (declare (ignore filled))
+  (w32api.gdi32::ArcTo (w32-medium-dc medium)
+		       (round-coordinate (- center-x radius-1-dx))
+		       (round-coordinate (- center-y radius-2-dy))
+		       (round-coordinate (+ center-x radius-1-dx))
+		       (round-coordinate (+ center-y radius-2-dy))
+		       (round-coordinate (* (+ center-x radius-1-dx) (cos start-angle)))
+		       (round-coordinate (* (+ center-y radius-2-dy) (sin start-angle)))
+		       (round-coordinate (* (+ center-x radius-1-dx) (cos end-angle)))
+		       (round-coordinate (* (+ center-y radius-2-dy) (sin end-angle)))))
 
 (defmethod medium-draw-circle* ((medium w32-medium)
 				center-x center-y radius start-angle end-angle
 				filled)
-  (declare (ignore center-x center-y radius
-		   start-angle end-angle filled))
-  nil)
+  (declare (ignore filled))
+  (w32api.gdi32::AngleArc (w32-medium-dc medium)
+			  (round-coordinate center-x)
+			  (round-coordinate center-y)
+			  (round-coordinate radius)
+			  (round-coordinate start-angle)
+			  (round-coordinate (- start-angle end-angle))))
 
 (defmethod text-style-ascent (text-style (medium w32-medium))
   (declare (ignore text-style))
@@ -169,7 +178,7 @@
   (declare (ignore start end
 		   align-x align-y
 		   toward-x toward-y transform-glyphs))
-  (w32api.gdi32::TextOutW (w32-medium-dc medium) x y string (length string)))
+  (w32api.gdi32::TextOutW (w32-medium-dc medium) (round-coordinate x) (round-coordinate y) string (length string)))
 
 #+nil
 (defmethod medium-buffering-output-p ((medium w32-medium))
