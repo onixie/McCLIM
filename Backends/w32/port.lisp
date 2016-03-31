@@ -117,11 +117,18 @@
   (unless sheet
     (sheet-mirrored-ancestor (sheet-parent sheet))))
 
-(defun get-modifier-state ()
-  (print (logior
-	  (if (w32api::shift-pressed-p) +shift-key+ 0)
-	  (if (w32api::ctrl-pressed-p) +control-key+ 0)
-	  (if (w32api::alt-pressed-p) +meta-key+ 0))))
+(defun get-mouse-state (wParam)
+  (let ((modifier-keys (print (w32api::get-modifier-key wParam))))
+    (values
+     (cond ((member :MK_LBUTTON modifier-keys) +pointer-left-button+)
+	   ((member :MK_MBUTTON modifier-keys) +pointer-middle-button+)
+	   ((member :MK_RBUTTON modifier-keys) +pointer-right-button+)
+	   (t +pointer-left-button+))
+     (logior
+      (if (member :MK_SHIFT modifier-keys) +shift-key+ 0)
+      (if (member :MK_CONTROL modifier-keys) +control-key+ 0)
+      ;;(if (eq (get-modifier-key wParam) :MK_MENU) +meta-key+ 0)
+      ))))
 
 (defun realize-mirror-aux (port sheet &rest args)
   (when (null (climi::port-lookup-mirror port sheet))
@@ -161,35 +168,26 @@
 						     :region (make-rectangle* x1 y1 x2 y2)
 						     :timestamp (get-universal-time))))))
       (w32api:message-handler+
-       window :WM_LBUTTONDOWN
+       window '(:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN
+		:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP)
        (lambda (hWnd Msg wParam lParam)
 	 (declare (ignore hWnd Msg))
-	 (climi::event-queue-append (w32-port-events port)
-				    (make-instance 'pointer-button-press-event
-						   :pointer 0
-						   :button +pointer-left-button+
-						   :x (w32api::get-cursor-x lParam)
-						   :y (w32api::get-cursor-y lParam)
-						   :graft-x 0
-						   :graft-y 0
-						   :sheet sheet
-						   :modifier-state (get-modifier-state)
-						   :timestamp (get-universal-time)))))
-      (w32api:message-handler+
-       window :WM_LBUTTONUP
-       (lambda (hWnd Msg wParam lParam)
-	 (declare (ignore hWnd Msg))
-	 (climi::event-queue-append (w32-port-events port)
-				    (make-instance 'pointer-button-release-event
-						   :pointer 0
-						   :button +pointer-left-button+
-						   :x (w32api::get-cursor-x lParam)
-						   :y (w32api::get-cursor-y lParam)
-						   :graft-x 0
-						   :graft-y 0
-						   :sheet sheet
-						   :modifier-state (get-modifier-state)
-						   :timestamp (get-universal-time)))))
+	 (multiple-value-bind (button modifier-state)
+	     (get-mouse-state wParam)
+	   (climi::event-queue-append (w32-port-events port)
+				      (make-instance (if (w32api::key-pressed-p lParam)
+							 'pointer-button-press-event
+							 'pointer-button-release-event)
+						     :pointer 0
+						     :button button
+						     :x (w32api::get-cursor-x lParam)
+						     :y (w32api::get-cursor-y lParam)
+						     :graft-x 0
+						     :graft-y 0
+						     :sheet sheet
+						     :modifier-state modifier-state
+						     :timestamp (get-universal-time))))))
+      
       (w32api:message-handler+
        window :WM_CHAR
        (lambda (hWnd Msg wParam lParam)
@@ -206,7 +204,7 @@
 						     :graft-x 0
 						     :graft-y 0
 						     :sheet (or (frame-properties (pane-frame sheet) 'focus) sheet)
-						     :modifier-state (get-modifier-state)
+						     :modifier-state 0
 						     :timestamp (get-universal-time))))))
       (w32api:message-handler+
        window :WM_DESTROY
