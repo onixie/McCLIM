@@ -37,7 +37,9 @@
    (window  :initform nil
 	    :accessor w32-port-window)
    (events  :initform nil
-	    :accessor w32-port-events)))
+	    :accessor w32-port-events)
+   (text-style-mapping :initform (make-hash-table :test #'equal)
+		       :accessor w32-port-text-style-mapping)))
 
 (defun parse-w32-server-path (path)
   (pop path)
@@ -304,14 +306,46 @@
 
 (defmethod text-style-mapping
     ((port w32-port) text-style &optional character-set)
-  (declare (ignore text-style character-set))
-  nil)
+  (declare (ignore character-set))
+  (gethash text-style (w32-port-text-style-mapping port)
+	   (let* ((face (text-style-face text-style))
+		  (face (if (listp face) face (list face)))
+		  (family (text-style-family text-style)))
+	     (setf (text-style-mapping port text-style)
+		   (w32api::create-font
+		    :height (case (text-style-size text-style)
+			      (:tiny 8)
+			      (:very-small 9)
+			      (:small 10)
+			      (:smaller 11) ;should be merged to some other size
+			      (:normal 12)
+			      (:larger 13) ;should be merged to some other size
+			      (:large 18)
+			      (:very-large 36)
+			      (:huge 72)
+			      (t 12))
+		    :italic (member :italic face)
+		    :weight (if (member :bold face)
+				:FW_BOLD
+				:FW_NORMAL)
+		    :pitch (if (eq :fix family)
+			       :FIXED_PITCH
+			       :DEFAULT_PITCH)
+		    :family (case family
+			      (:fix :MODERN)
+			      (:serif :ROMAN)
+			      (:sans-serif :SWISS)
+			      (t :DONTCARE))
+		    :face (case family
+			    (:fix "Courier")
+			    (:serif "MS Serif")
+			    (:sans-serif "MS Sans Serif")
+			    (t "")))))))
 
 (defmethod (setf text-style-mapping)
-    (font-name (port w32-port)
-     (text-style text-style) &optional character-set)
-  (declare (ignore font-name text-style character-set))
-  nil)
+    (font-name (port w32-port) (text-style text-style) &optional character-set)
+  (declare (ignore character-set))
+  (setf (gethash text-style (w32-port-text-style-mapping port)) font-name))
 
 (defmethod port-character-width ((port w32-port) text-style char)
   (declare (ignore text-style char))

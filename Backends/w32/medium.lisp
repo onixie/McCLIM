@@ -21,13 +21,17 @@
 
 (defclass w32-medium (basic-medium)
   ((dc :initform nil
-       :accessor w32-medium-dc))
-  ;((buffering-output-p :accessor medium-buffering-output-p))
+       :accessor w32-medium-dc)
+   (font :initform nil
+	 :accessor w32-medium-font))
+					;((buffering-output-p :accessor medium-buffering-output-p))
   )
 
 (defmethod (setf medium-text-style) :before (text-style (medium w32-medium))
-  (declare (ignore text-style))
-  nil)
+  (setf (w32-medium-font medium)
+	(text-style-mapping (port (medium-sheet medium)) text-style))
+  (when (w32-medium-dc medium)
+    (w32api.gdi32::SelectObject (w32-medium-dc medium) (w32-medium-font medium))))
 
 (defmethod (setf medium-line-style) :before (line-style (medium w32-medium))
   (declare (ignore line-style))
@@ -127,49 +131,52 @@
 			  (round-coordinate (- start-angle end-angle))))
 
 (defmethod text-style-ascent (text-style (medium w32-medium))
-  (declare (ignore text-style))
-  (w32api::get-text-ascent (w32-medium-dc medium)))
+  (if text-style
+      (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
+	(w32api::get-text-ascent (w32-medium-dc medium)))
+      (w32api::get-text-ascent (w32-medium-dc medium))))
 
 (defmethod text-style-descent (text-style (medium w32-medium))
-  (declare (ignore text-style))
-  (w32api::get-text-descent (w32-medium-dc medium)))
+  (if text-style
+      (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
+	(w32api::get-text-descent (w32-medium-dc medium)))
+      (w32api::get-text-descent (w32-medium-dc medium))))
 
 (defmethod text-style-height (text-style (medium w32-medium))
   (+ (text-style-ascent text-style medium)
      (text-style-descent text-style medium)))
 
 (defmethod text-style-character-width (text-style (medium w32-medium) char)
-  (declare (ignore text-style char))
-  (w32api::get-text-char-width (w32-medium-dc medium)))
+  (declare (ignore char))
+  (if text-style
+      (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
+	(w32api::get-text-char-width (w32-medium-dc medium)))
+      (w32api::get-text-char-width (w32-medium-dc medium))))
 
 ;;; FIXME: this one is nominally backend-independent
 (defmethod text-style-width (text-style (medium w32-medium))
   (text-style-character-width text-style medium #\m))
 
-(defmethod text-size
-    ((medium w32-medium) string &key text-style (start 0) end)
-  (setf string (etypecase string
-		 (character (string string))
-		 (string string)))
-  (multiple-value-bind (cx cy)
-      (w32api::get-text-extent (w32-medium-dc medium) string)
-    (values cx cy cx 0 (text-style-ascent text-style medium)))
-  ;; (let ((width 0)
-  ;; 	(height (text-style-height text-style medium))
-  ;; 	(x (- (or end (length string)) start))
-  ;; 	(y 0)
-  ;; 	(baseline (text-style-ascent text-style medium)))
-  ;;   (do ((pos (position #\Newline string :start start :end end)
-  ;; 	      (position #\Newline string :start (1+ pos) :end end)))
-  ;; 	((null pos) (values width height x y baseline))
-  ;;     (let ((start start)
-  ;; 	    (end pos))
-  ;; 	(setf x (- end start))
-  ;; 	(setf y (+ y (text-style-height text-style medium)))
-  ;; 	(setf width (max width x))
-  ;; 	(setf height (+ height (text-style-height text-style medium)))
-  ;; 	(setf baseline (+ baseline (text-style-height text-style medium))))))
-  )
+(defmethod text-size ((medium w32-medium) string &key text-style (start 0) end)
+  (let* ((string (if (stringp string) string
+		     (string string)))
+	 (end (or end (length string)))
+	 (text-style (or text-style (medium-text-style medium))))
+    (values-list
+     (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
+       (cond ((= start end) (values 0 0 0 0 0))
+	     (t
+	      (let ((position-newline (position #\newline string :start start :end end)))
+		(cond ((not (null position-newline))
+		       (multiple-value-bind (cx cy)
+			   (w32api::get-text-extent (w32-medium-dc medium) (subseq string start position-newline))
+			 (multiple-value-bind (w h x y baseline)
+			     (text-size medium string :text-style text-style :start (1+ position-newline) :end end)
+			   (list (max w cx) (+ cy h) x (+ cy y) (+ cy baseline)))))
+		      (t
+		       (multiple-value-bind (cx cy)
+			   (w32api::get-text-extent (w32-medium-dc medium) string)
+			 (list cx cy cx 0 (text-style-ascent text-style medium))))))))))))
 
 (defmethod climi::text-bounding-rectangle*
     ((medium w32-medium) string &key text-style (start 0) end)
