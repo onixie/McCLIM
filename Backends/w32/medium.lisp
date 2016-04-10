@@ -97,8 +97,8 @@
   nil)
 
 (defmethod medium-draw-rectangle* ((medium w32-medium) x1 y1 x2 y2 filled)
-  (declare (ignore filled))
-  (w32api.gdi32::Rectangle (w32-medium-dc medium) (round-coordinate x1) (round-coordinate y1) (round-coordinate x2) (round-coordinate y2)))
+  (w32api::with-drawing-object ((w32-medium-dc medium) (unless filled (w32api::get-stock-object :NULL_BRUSH)))
+    (w32api.gdi32::Rectangle (w32-medium-dc medium) (round-coordinate x1) (round-coordinate y1) (round-coordinate x2) (round-coordinate y2))))
 
 (defmethod medium-draw-rectangles* ((medium w32-medium) position-seq filled)
   (loop for (left top right bottom) on position-seq by #'cddddr
@@ -108,16 +108,16 @@
 				 radius-1-dx radius-1-dy
 				 radius-2-dx radius-2-dy
 				 start-angle end-angle filled)
-  (declare (ignore filled))
-  (w32api.gdi32::ArcTo (w32-medium-dc medium)
-		       (round-coordinate (- center-x radius-1-dx))
-		       (round-coordinate (- center-y radius-2-dy))
-		       (round-coordinate (+ center-x radius-1-dx))
-		       (round-coordinate (+ center-y radius-2-dy))
-		       (round-coordinate (* (+ center-x radius-1-dx) (cos start-angle)))
-		       (round-coordinate (* (+ center-y radius-2-dy) (sin start-angle)))
-		       (round-coordinate (* (+ center-x radius-1-dx) (cos end-angle)))
-		       (round-coordinate (* (+ center-y radius-2-dy) (sin end-angle)))))
+  (w32api::with-drawing-object ((w32-medium-dc medium) (unless filled (w32api::get-stock-object :NULL_BRUSH)))
+    (w32api.gdi32::ArcTo (w32-medium-dc medium)
+			 (round-coordinate (- center-x radius-1-dx))
+			 (round-coordinate (- center-y radius-2-dy))
+			 (round-coordinate (+ center-x radius-1-dx))
+			 (round-coordinate (+ center-y radius-2-dy))
+			 (round-coordinate (* (+ center-x radius-1-dx) (cos start-angle)))
+			 (round-coordinate (* (+ center-y radius-2-dy) (sin start-angle)))
+			 (round-coordinate (* (+ center-x radius-1-dx) (cos end-angle)))
+			 (round-coordinate (* (+ center-y radius-2-dy) (sin end-angle))))))
 
 (defmethod medium-draw-circle* ((medium w32-medium)
 				center-x center-y radius start-angle end-angle
@@ -131,16 +131,12 @@
 			  (round-coordinate (- start-angle end-angle))))
 
 (defmethod text-style-ascent (text-style (medium w32-medium))
-  (if text-style
-      (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
-	(w32api::get-text-ascent (w32-medium-dc medium)))
-      (w32api::get-text-ascent (w32-medium-dc medium))))
+  (w32api::with-drawing-object ((w32-medium-dc medium) (when text-style (text-style-mapping (port (medium-sheet medium)) text-style)))
+    (w32api::get-text-ascent (w32-medium-dc medium))))
 
 (defmethod text-style-descent (text-style (medium w32-medium))
-  (if text-style
-      (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
-	(w32api::get-text-descent (w32-medium-dc medium)))
-      (w32api::get-text-descent (w32-medium-dc medium))))
+  (w32api::with-drawing-object ((w32-medium-dc medium) (when text-style (text-style-mapping (port (medium-sheet medium)) text-style)))
+    (w32api::get-text-descent (w32-medium-dc medium))))
 
 (defmethod text-style-height (text-style (medium w32-medium))
   (+ (text-style-ascent text-style medium)
@@ -148,10 +144,8 @@
 
 (defmethod text-style-character-width (text-style (medium w32-medium) char)
   (declare (ignore char))
-  (if text-style
-      (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
-	(w32api::get-text-char-width (w32-medium-dc medium)))
-      (w32api::get-text-char-width (w32-medium-dc medium))))
+  (w32api::with-drawing-object ((w32-medium-dc medium) (when text-style (text-style-mapping (port (medium-sheet medium)) text-style)))
+    (w32api::get-text-char-width (w32-medium-dc medium))))
 
 ;;; FIXME: this one is nominally backend-independent
 (defmethod text-style-width (text-style (medium w32-medium))
@@ -209,14 +203,17 @@
   nil)
 
 (defmethod medium-finish-output ((medium w32-medium))
-  nil)
+  (w32api:update-window (sheet-mirror (medium-sheet medium))))
 
 (defmethod medium-force-output ((medium w32-medium))
-  nil)
+  (w32api:update-window (sheet-mirror (medium-sheet medium))))
 
 (defmethod medium-clear-area ((medium w32-medium) left top right bottom)
-  (declare (ignore left top right bottom))
-  nil)
+  (w32api:invalidate-rect (sheet-mirror (medium-sheet medium))
+			  (round-coordinate left)
+			  (round-coordinate top)
+			  (round-coordinate right)
+			  (round-coordinate bottom)))
 
 (defmethod medium-beep ((medium w32-medium))
   nil)
