@@ -23,19 +23,59 @@
   ((dc :initform nil
        :accessor w32-medium-dc)
    (font :initform nil
-	 :accessor w32-medium-font))
+	 :accessor w32-medium-font)
+   (pen :initform nil
+	:accessor w32-medium-pen))
 					;((buffering-output-p :accessor medium-buffering-output-p))
   )
 
-(defmethod (setf medium-text-style) :before (text-style (medium w32-medium))
-  (setf (w32-medium-font medium)
-	(text-style-mapping (port (medium-sheet medium)) text-style))
+(defmethod medium-rgb ((medium w32-medium) (color color))
+  (color-rgb color))
+
+(defmethod medium-rgb ((medium w32-medium) (color (eql +foreground-ink+)))
+  (color-rgb (medium-foreground medium)))
+
+(defmethod medium-rgb ((medium w32-medium) (color (eql +background-ink+)))
+  (color-rgb (medium-background medium)))
+
+(defmethod medium-rgb ((medium w32-medium) (color (eql +flipping-ink+)))
+  (color-rgb (medium-background medium)))
+
+(defmethod (setf medium-text-style) :after (text-style (medium w32-medium))
   (when (w32-medium-dc medium)
+    (when (w32-medium-font medium)
+      (w32api.gdi32::DeleteObject (w32-medium-font medium)))
+    (setf (w32-medium-font medium)
+	  (text-style-mapping (port (medium-sheet medium)) text-style))
     (w32api.gdi32::SelectObject (w32-medium-dc medium) (w32-medium-font medium))))
 
-(defmethod (setf medium-line-style) :before (line-style (medium w32-medium))
-  (declare (ignore line-style))
-  nil)
+(defmethod (setf medium-line-style) :after (line-style (medium w32-medium))
+  (flet ((line-style-mapping (line-style)
+	   (multiple-value-bind (r g b)
+	       (medium-rgb medium (medium-ink medium))
+	     (w32api::create-pen :style (cond ((eq (line-style-dashes line-style) nil) :PS_SOLID)
+					      ((eq (line-style-dashes line-style) t) :PS_DASH)
+					      (t (mapcar #'round-coordinate (line-style-dashes line-style))))
+				 :endcap (case (line-style-cap-shape line-style)
+					   (:butt :PS_ENDCAP_FLAT)
+					   (:square :PS_ENDCAP_SQUARE)
+					   (:round :PS_ENDCAP_ROUND)
+					   (t :PS_ENDCAP_FLAT))
+				 :join (case (line-style-joint-shape line-style)
+					 (:miter :PS_JOIN_MITER)
+					 (:bevel :PS_JOIN_BEVEL)
+					 (:round :PS_JOIN_ROUND)
+					 (t :PS_JOIN_MITER))
+				 :width (round-coordinate (line-style-thickness line-style))
+				 :color (list (round-coordinate (* 255 r))
+					      (round-coordinate (* 255 g))
+					      (round-coordinate (* 255 b)))))))
+    (when (w32-medium-dc medium)
+      (when (w32-medium-pen medium)
+	(w32api.gdi32::DeleteObject (w32-medium-pen medium)))
+      (setf (w32-medium-pen medium)
+	    (line-style-mapping line-style))
+      (w32api.gdi32::SelectObject (w32-medium-dc medium) (w32-medium-pen medium)))))
 
 (defmethod (setf medium-clipping-region) :after (region (medium w32-medium))
   (declare (ignore region))
@@ -72,17 +112,27 @@
     nil))
 
 (defmethod medium-draw-point* ((medium w32-medium) x y)
-  (declare (ignore x y))
-  nil)
+  (multiple-value-bind (r g b)
+      (medium-rgb medium (medium-ink medium))
+    (w32api.gdi32::SetPixel (w32-medium-dc medium) (round-coordinate x) (round-coordinate y)
+			    (w32api::make-rgb-color (round-coordinate (* 255 r))
+						    (round-coordinate (* 255 g))
+						    (round-coordinate (* 255 b))))))
 
 (defmethod medium-draw-points* ((medium w32-medium) coord-seq)
-  (declare (ignore coord-seq))
-  nil)
+  (climi::do-sequence ((x y) coord-seq)
+    (medium-draw-point* medium x y)))
 
 (defmethod medium-draw-line* ((medium w32-medium) x1 y1 x2 y2)
-  (let ((dc (w32-medium-dc medium)))
-    (w32api.gdi32::MoveToEx dc (round-coordinate x1) (round-coordinate y1) (cffi:null-pointer))
-    (w32api.gdi32::LineTo dc (round-coordinate x2) (round-coordinate y2))))
+  (multiple-value-bind (r g b)
+      (medium-rgb medium (medium-ink medium))
+    (let ((dc (w32-medium-dc medium))
+	  (old-color (w32api.gdi32::SetDCPenColor (w32-medium-dc medium) (w32api::make-rgb-color (round-coordinate (* 255 r))
+												 (round-coordinate (* 255 g))
+												 (round-coordinate (* 255 b))))))
+      (w32api.gdi32::MoveToEx dc (round-coordinate x1) (round-coordinate y1) (cffi:null-pointer))
+      (w32api.gdi32::LineTo dc (round-coordinate x2) (round-coordinate y2))
+      (w32api.gdi32::SetDCPenColor (w32-medium-dc medium) old-color))))
 
 ;; FIXME: Invert the transformation and apply it here, as the :around
 ;; methods on transform-coordinates-mixin will cause it to be applied
@@ -97,8 +147,14 @@
   nil)
 
 (defmethod medium-draw-rectangle* ((medium w32-medium) x1 y1 x2 y2 filled)
-  (w32api::with-drawing-object ((w32-medium-dc medium) (unless filled (w32api::get-stock-object :NULL_BRUSH)))
-    (w32api.gdi32::Rectangle (w32-medium-dc medium) (round-coordinate x1) (round-coordinate y1) (round-coordinate x2) (round-coordinate y2))))
+  (multiple-value-bind (r g b)
+      (medium-rgb medium (medium-ink medium))
+    (w32api::with-drawing-object ((w32-medium-dc medium) (if filled
+							     (w32api::create-brush :color (list (round-coordinate (* 255 r))
+												(round-coordinate (* 255 g))
+												(round-coordinate (* 255 b))))
+							     (w32api::get-stock-object :NULL_BRUSH)))
+      (w32api.gdi32::Rectangle (w32-medium-dc medium) (round-coordinate x1) (round-coordinate y1) (round-coordinate x2) (round-coordinate y2)))))
 
 (defmethod medium-draw-rectangles* ((medium w32-medium) position-seq filled)
   (loop for (left top right bottom) on position-seq by #'cddddr
@@ -108,27 +164,33 @@
 				 radius-1-dx radius-1-dy
 				 radius-2-dx radius-2-dy
 				 start-angle end-angle filled)
-  (w32api::with-drawing-object ((w32-medium-dc medium) (unless filled (w32api::get-stock-object :NULL_BRUSH)))
-    (w32api.gdi32::ArcTo (w32-medium-dc medium)
-			 (round-coordinate (- center-x radius-1-dx))
-			 (round-coordinate (- center-y radius-2-dy))
-			 (round-coordinate (+ center-x radius-1-dx))
-			 (round-coordinate (+ center-y radius-2-dy))
-			 (round-coordinate (* (+ center-x radius-1-dx) (cos start-angle)))
-			 (round-coordinate (* (+ center-y radius-2-dy) (sin start-angle)))
-			 (round-coordinate (* (+ center-x radius-1-dx) (cos end-angle)))
-			 (round-coordinate (* (+ center-y radius-2-dy) (sin end-angle))))))
+  (multiple-value-bind (r g b)
+      (medium-rgb medium (medium-ink medium))
+   (w32api::with-drawing-object ((w32-medium-dc medium) (if filled
+							    (w32api::create-brush :color (list (round-coordinate (* 255 r))
+											       (round-coordinate (* 255 g))
+											       (round-coordinate (* 255 b))))
+							    (w32api::get-stock-object :NULL_BRUSH)))
+     (if (= (mod (- end-angle start-angle) (* 2 pi)) 0.0d0)
+	 (w32api.gdi32::Ellipse (w32-medium-dc medium)
+				(round-coordinate (- center-x radius-1-dx))
+				(round-coordinate (- center-y radius-2-dy))
+				(round-coordinate (+ center-x radius-1-dx))
+				(round-coordinate (+ center-y radius-2-dy)))
+	 (w32api.gdi32::ArcTo (w32-medium-dc medium)
+			      (round-coordinate (- center-x radius-1-dx))
+			      (round-coordinate (- center-y radius-2-dy))
+			      (round-coordinate (+ center-x radius-1-dx))
+			      (round-coordinate (+ center-y radius-2-dy))
+			      (round-coordinate (* (+ center-x radius-1-dx) (cos start-angle)))
+			      (round-coordinate (* (+ center-y radius-2-dy) (sin start-angle)))
+			      (round-coordinate (* (+ center-x radius-1-dx) (cos end-angle)))
+			      (round-coordinate (* (+ center-y radius-2-dy) (sin end-angle))))))))
 
 (defmethod medium-draw-circle* ((medium w32-medium)
 				center-x center-y radius start-angle end-angle
 				filled)
-  (declare (ignore filled))
-  (w32api.gdi32::AngleArc (w32-medium-dc medium)
-			  (round-coordinate center-x)
-			  (round-coordinate center-y)
-			  (round-coordinate radius)
-			  (round-coordinate start-angle)
-			  (round-coordinate (- start-angle end-angle))))
+  (medium-draw-ellipse* medium center-x center-y radius 0 0 radius start-angle end-angle filled))
 
 (defmethod text-style-ascent (text-style (medium w32-medium))
   (w32api::with-drawing-object ((w32-medium-dc medium) (when text-style (text-style-mapping (port (medium-sheet medium)) text-style)))
@@ -180,11 +242,17 @@
                               start end
                               align-x align-y
                               toward-x toward-y transform-glyphs)
-  (declare (ignore start end
-		   align-x align-y
+  (declare (ignore align-x align-y
 		   toward-x toward-y transform-glyphs))
-  (w32api::with-background-mode ((w32-medium-dc medium) :OPAQUE)
-    (w32api.gdi32::TextOutW (w32-medium-dc medium) (round-coordinate x) (round-coordinate y) string (length string))))
+  (multiple-value-bind (r g b)
+      (medium-rgb medium (medium-ink medium))
+    (w32api::with-background-mode ((w32-medium-dc medium) :OPAQUE)
+      (let ((string (subseq string start end))
+	    (old-color (w32api.gdi32::SetTextColor (w32-medium-dc medium) (w32api::make-rgb-color (round-coordinate (* 255 r))
+												  (round-coordinate (* 255 g))
+												  (round-coordinate (* 255 b))))))
+	(w32api.gdi32::TextOutW (w32-medium-dc medium) (round-coordinate x) (round-coordinate y) string (length string))
+	(w32api.gdi32::SetTextColor (w32-medium-dc medium) old-color)))))
 
 #+nil
 (defmethod medium-buffering-output-p ((medium w32-medium))
