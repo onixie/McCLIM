@@ -209,11 +209,24 @@
 						     :modifier-state 0
 						     :timestamp (get-universal-time))))))
       (w32api:message-handler+
-       window :WM_DESTROY
+       window '(:WM_SIZE :WM_MOVE :WM_SIZING :WM_MOVING)
        (w32api::proc
-	 (climi::event-queue-append (w32-port-events port)
-				    (make-instance 'climi::window-destroy-event
-						   :sheet sheet))))))
+	 (multiple-value-bind (x1 y1 x2 y2)
+	     (w32api::get-window-rectangle window)
+	   (climi::event-queue-append (w32-port-events port)
+				      (make-instance 'climi::window-configuration-event
+						     :sheet sheet
+						     :x x1
+						     :y y1
+						     :width (abs (- x2 x1))
+						     :height (abs (- y2 y1)))))))
+      (w32api:message-handler+
+	window '(:WM_DESTROY :WM_CLOSE)
+	(w32api::proc
+	  (climi::event-queue-append (w32-port-events port)
+				     (make-instance 'climi::window-destroy-event
+						    :sheet sheet))
+	  (w32api::post-quit-message 0)))))
   (climi::port-lookup-mirror port sheet))
 
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
