@@ -209,7 +209,7 @@
 						     :modifier-state 0
 						     :timestamp (get-universal-time))))))
       (w32api:message-handler+
-       window '(:WM_SIZE :WM_MOVE :WM_SIZING :WM_MOVING)
+       window '(:WM_SIZE :WM_MOVE :WM_ACTIVATE)
        (w32api::proc
 	 (multiple-value-bind (x1 y1 x2 y2)
 	     (w32api::get-window-rectangle window)
@@ -219,7 +219,11 @@
 						     :x x1
 						     :y y1
 						     :width (abs (- x2 x1))
-						     :height (abs (- y2 y1)))))))
+						     :height (abs (- y2 y1))))
+	   (multiple-value-bind (x1 y1 x2 y2)
+	       (w32api::get-window-rectangle window t)
+	     (w32api::invalidate-rect window x1 y1 x2 y2)
+	     (w32api::update-window window)))))
       (w32api:message-handler+
        window '(:WM_DESTROY :WM_CLOSE)
        (w32api::proc
@@ -243,6 +247,11 @@
 
 (defmethod realize-mirror ((port w32-port) (sheet climi::top-level-sheet-pane))
   (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port)))
+
+(defmethod realize-mirror :after ((port w32-port) (sheet climi::top-level-sheet-pane))
+  (let ((window (sheet-mirror sheet)))
+    (w32api::raise-window window)
+    (w32api::active-window window)))
 
 (defmethod destroy-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
   (when (climi::port-lookup-mirror port sheet)
