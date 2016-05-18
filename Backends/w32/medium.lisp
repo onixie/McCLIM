@@ -43,8 +43,6 @@
 
 (defmethod (setf medium-text-style) :after (text-style (medium w32-medium))
   (when (w32-medium-dc medium)
-    (when (w32-medium-font medium)
-      (w32api.gdi32::DeleteObject (w32-medium-font medium)))
     (setf (w32-medium-font medium)
 	  (text-style-mapping (port (medium-sheet medium)) text-style))
     (w32api.gdi32::SelectObject (w32-medium-dc medium) (w32-medium-font medium))))
@@ -150,7 +148,7 @@
 							     (w32api::create-brush :color (list (round-coordinate (* 255 r))
 												(round-coordinate (* 255 g))
 												(round-coordinate (* 255 b))))
-							     (w32api::get-stock-object :NULL_BRUSH)))
+							     (w32api::get-stock-object :NULL_BRUSH)) :delete-p t)
       (w32api.gdi32::Rectangle (w32-medium-dc medium) (round-coordinate x1) (round-coordinate y1) (round-coordinate x2) (round-coordinate y2)))))
 
 (defmethod medium-draw-rectangles* ((medium w32-medium) position-seq filled)
@@ -167,7 +165,7 @@
 							     (w32api::create-brush :color (list (round-coordinate (* 255 r))
 												(round-coordinate (* 255 g))
 												(round-coordinate (* 255 b))))
-							     (w32api::get-stock-object :NULL_BRUSH)))
+							     (w32api::get-stock-object :NULL_BRUSH)) :delete-p t)
       (if (= (mod (- end-angle start-angle) (* 2 pi)) 0.0d0)
 	  (w32api.gdi32::Ellipse (w32-medium-dc medium)
 				 (round-coordinate (- center-x radius-1-dx))
@@ -249,7 +247,8 @@
 												  (round-coordinate (* 255 g))
 												  (round-coordinate (* 255 b))))))
 	(w32api.gdi32::TextOutW (w32-medium-dc medium) (round-coordinate x) (round-coordinate y) string (length string))
-	(w32api.gdi32::SetTextColor (w32-medium-dc medium) old-color)))))
+	(w32api.gdi32::SetTextColor (w32-medium-dc medium) old-color)))
+    t))
 
 #+nil
 (defmethod medium-buffering-output-p ((medium w32-medium))

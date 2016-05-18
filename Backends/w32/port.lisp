@@ -221,12 +221,12 @@
 						     :width (abs (- x2 x1))
 						     :height (abs (- y2 y1)))))))
       (w32api:message-handler+
-	window '(:WM_DESTROY :WM_CLOSE)
-	(w32api::proc
-	  (climi::event-queue-append (w32-port-events port)
-				     (make-instance 'climi::window-destroy-event
-						    :sheet sheet))
-	  (w32api::post-quit-message 0)))))
+       window '(:WM_DESTROY :WM_CLOSE)
+       (w32api::proc
+	 (climi::event-queue-append (w32-port-events port)
+				    (make-instance 'climi::window-destroy-event
+						   :sheet sheet))
+	 (w32api::post-quit-message 0)))))
   (climi::port-lookup-mirror port sheet))
 
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
@@ -320,40 +320,40 @@
 (defmethod text-style-mapping
     ((port w32-port) text-style &optional character-set)
   (declare (ignore character-set))
-  (gethash text-style (w32-port-text-style-mapping port)
-	   (let* ((face (text-style-face text-style))
-		  (face (if (listp face) face (list face)))
-		  (family (text-style-family text-style)))
-	     (setf (text-style-mapping port text-style)
-		   (w32api::create-font
-		    :height (case (text-style-size text-style)
-			      (:tiny 8)
-			      (:very-small 9)
-			      (:small 10)
-			      (:smaller 11) ;should be merged to some other size
-			      (:normal 12)
-			      (:larger 13) ;should be merged to some other size
-			      (:large 18)
-			      (:very-large 36)
-			      (:huge 72)
-			      (t 12))
-		    :italic (member :italic face)
-		    :weight (if (member :bold face)
-				:FW_BOLD
-				:FW_NORMAL)
-		    :pitch (if (eq :fix family)
-			       :FIXED_PITCH
-			       :DEFAULT_PITCH)
-		    :family (case family
-			      (:fix :MODERN)
-			      (:serif :ROMAN)
-			      (:sans-serif :SWISS)
-			      (t :DONTCARE))
-		    :face (case family
-			    (:fix "Courier")
-			    (:serif "MS Serif")
-			    (:sans-serif "MS Sans Serif")
-			    (t "")))))))
+  (or (gethash text-style (w32-port-text-style-mapping port))
+      (let* ((face (text-style-face text-style))
+	     (face (if (listp face) face (list face)))
+	     (family (text-style-family text-style)))
+	(setf (text-style-mapping port text-style)
+	      (w32api::create-font
+	       :height (case (text-style-size text-style)
+			 (:tiny 8)
+			 (:very-small 9)
+			 (:small 10)
+			 (:smaller 11) ;should be merged to some other size
+			 (:normal 12)
+			 (:larger 13) ;should be merged to some other size
+			 (:large 18)
+			 (:very-large 36)
+			 (:huge 72)
+			 (t 12))
+	       :italic (member :italic face)
+	       :weight (if (member :bold face)
+			   :FW_BOLD
+			   :FW_NORMAL)
+	       :pitch (if (eq :fix family)
+			  :FIXED_PITCH
+			  :DEFAULT_PITCH)
+	       :family (case family
+			 (:fix :MODERN)
+			 (:serif :ROMAN)
+			 (:sans-serif :SWISS)
+			 (t :DONTCARE))
+	       :face (case family
+		       (:fix "Courier")
+		       (:serif "MS Serif")
+		       (:sans-serif "MS Sans Serif")
+		       (t "")))))))
 
 (defmethod (setf text-style-mapping)
     (font-name (port w32-port) (text-style text-style) &optional character-set)
