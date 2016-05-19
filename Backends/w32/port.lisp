@@ -89,14 +89,19 @@
 	    :monitor (w32api:get-monitor-name (w32-port-monitor port)))))
 
 (defmethod port-set-mirror-region ((port w32-port) mirror mirror-region)
-  (w32api:resize-window mirror
-			(floor (bounding-rectangle-max-x mirror-region))
-			(floor (bounding-rectangle-max-y mirror-region))))
+  (multiple-value-bind (width height)
+      (w32api::calculate-window-size-by-expect-client-area
+       mirror
+       (round-coordinate (bounding-rectangle-width mirror-region))
+       (round-coordinate (bounding-rectangle-height mirror-region)))
+    (w32api::resize-window mirror
+			   (or width (round-coordinate (bounding-rectangle-width mirror-region)))
+			   (or height (round-coordinate (bounding-rectangle-height mirror-region))))))
 
 (defmethod port-set-mirror-transformation ((port w32-port) mirror mirror-transformation)
   (w32api:move-window mirror
-		      (floor (nth-value 0 (transform-position mirror-transformation 0 0)))
-		      (floor (nth-value 1 (transform-position mirror-transformation 0 0)))))
+		      (round-coordinate (nth-value 0 (transform-position mirror-transformation 0 0)))
+		      (round-coordinate (nth-value 1 (transform-position mirror-transformation 0 0)))))
 
 (declaim (inline round-coordinate))
 (defun round-coordinate (x)
@@ -148,7 +153,6 @@
 								 (climi::%sheet-mirror-transformation sheet)
 								 0 0)))
 				 (getf args :y))
-
 			  :width (if (climi::%sheet-mirror-region sheet)
 				     (round-coordinate (climi::bounding-rectangle-width (climi::%sheet-mirror-region sheet)))
 				     (getf args :width))
@@ -246,7 +250,10 @@
     (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window))))
 
 (defmethod realize-mirror ((port w32-port) (sheet climi::top-level-sheet-pane))
-  (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port)))
+  (let ((q (compose-space sheet)))
+    (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port)
+			:width (round-coordinate (space-requirement-width q))
+			:height (round-coordinate (space-requirement-height q)))))
 
 (defmethod realize-mirror :after ((port w32-port) (sheet climi::top-level-sheet-pane))
   (let ((window (sheet-mirror sheet)))
