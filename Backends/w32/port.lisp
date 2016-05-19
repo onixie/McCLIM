@@ -221,7 +221,7 @@
 						     :width (abs (- x2 x1))
 						     :height (abs (- y2 y1))))
 	   (multiple-value-bind (x1 y1 x2 y2)
-	       (w32api::get-window-rectangle window t)
+	       (w32api::get-window-rectangle window :client-area-p t)
 	     (w32api::invalidate-rect window x1 y1 x2 y2)
 	     (w32api::update-window window)))))
       (w32api:message-handler+
@@ -243,7 +243,7 @@
 
 (defmethod realize-mirror :after ((port w32-port) (sheet sheet-with-medium-mixin))
   (let ((window (sheet-mirror sheet)))
-    (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window :full t))))
+    (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window))))
 
 (defmethod realize-mirror ((port w32-port) (sheet climi::top-level-sheet-pane))
   (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port)))
@@ -313,11 +313,12 @@
 
 (defmethod make-graft
     ((port w32-port) &key (orientation :default) (units :device))
-  (let ((graft (make-instance 'w32-graft
-			      :port port :mirror (w32-port-window port)
-			      :orientation orientation :units units)))
+  (let* ((mirror (w32-port-window port))
+	 (graft (make-instance 'w32-graft
+			       :port port :mirror mirror
+			       :orientation orientation :units units)))
     (multiple-value-bind (x y width height)
-	(w32api:get-window-rectangle (w32-port-window port))
+	(w32api:get-window-rectangle mirror)
       (setf (sheet-region graft)
 	    (make-bounding-rectangle x y width height)))
     (push graft (climi::port-grafts port))
