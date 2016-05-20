@@ -216,7 +216,7 @@
        window '(:WM_SIZE :WM_MOVE :WM_ACTIVATE)
        (w32api::proc
 	 (multiple-value-bind (x1 y1 x2 y2)
-	     (w32api::get-window-rectangle window)
+	     (w32api::get-window-rectangle window :client-area-p t)
 	   (climi::event-queue-append (w32-port-events port)
 				      (make-instance 'climi::window-configuration-event
 						     :sheet sheet
@@ -279,7 +279,7 @@
 
 (defmethod mirror-transformation ((port w32-port) mirror)
   (multiple-value-bind (x y)
-      (w32api:get-window-rectangle mirror)
+      (w32api:get-window-rectangle mirror :client-area-p t)
     (make-translation-transformation x y)))
 
 (defmethod port-set-sheet-region ((port w32-port) (graft graft) region)
@@ -325,7 +325,7 @@
 			       :port port :mirror mirror
 			       :orientation orientation :units units)))
     (multiple-value-bind (x y width height)
-	(w32api:get-window-rectangle mirror)
+	(w32api:get-window-rectangle mirror :client-area-p t)
       (setf (sheet-region graft)
 	    (make-bounding-rectangle x y width height)))
     (push graft (climi::port-grafts port))
@@ -388,14 +388,14 @@
 (defmethod port-mirror-width ((port w32-port) sheet)
   (let ((mirror (climi::port-lookup-mirror port sheet)))
     (multiple-value-bind (x y width height)
-	(w32api:get-window-rectangle mirror)
+	(w32api:get-window-rectangle mirror :client-area-p t)
       (declare (ignore x y height))
       width)))
 
 (defmethod port-mirror-height ((port w32-port) sheet)
   (let ((mirror (climi::port-lookup-mirror port sheet)))
     (multiple-value-bind (x y width height)
-	(w32api:get-window-rectangle mirror)
+	(w32api:get-window-rectangle mirror :client-area-p t)
       (declare (ignore x y width))
       height)))
 
