@@ -125,9 +125,8 @@
     (medium-draw-point* medium x y)))
 
 (defmethod medium-draw-line* ((medium w32-medium) x1 y1 x2 y2)
-  (let ((dc (w32-medium-dc medium)))
-    (w32api.gdi32::MoveToEx dc (round-coordinate x1) (round-coordinate y1) (cffi:null-pointer))
-    (w32api.gdi32::LineTo dc (round-coordinate x2) (round-coordinate y2))))
+  (w32api.type::with-points ((points) (list (list x1 y1) (list x2 y2)))
+    (w32api::PolyLine (w32-medium-dc medium) points 2)))
 
 ;; FIXME: Invert the transformation and apply it here, as the :around
 ;; methods on transform-coordinates-mixin will cause it to be applied
@@ -175,37 +174,66 @@
   (climi::do-sequence ((left top right bottom) position-seq)
     (medium-draw-rectangle* medium left top right bottom filled)))
 
+
 (defmethod medium-draw-ellipse* ((medium w32-medium) center-x center-y
 				 radius-1-dx radius-1-dy
 				 radius-2-dx radius-2-dy
 				 start-angle end-angle filled)
   (multiple-value-bind (r g b)
       (medium-rgb medium (medium-ink medium))
-    (w32api::with-drawing-object ((w32-medium-dc medium) (if filled
-							     (w32api::create-brush :color (list (round-coordinate (* 255 r))
-												(round-coordinate (* 255 g))
-												(round-coordinate (* 255 b))))
-							     (w32api::get-stock-object :NULL_BRUSH)) :delete-p t)
+    (w32api::with-drawing-object ((w32-medium-dc medium)
+				  (if filled
+				      (w32api::create-brush :color (list (round-coordinate (* 255 r))
+									 (round-coordinate (* 255 g))
+									 (round-coordinate (* 255 b))))
+				      (w32api::get-stock-object :NULL_BRUSH)) :delete-p t)
       (if (= (mod (- end-angle start-angle) (* 2 pi)) 0.0d0)
 	  (w32api.gdi32::Ellipse (w32-medium-dc medium)
 				 (round-coordinate (- center-x radius-1-dx))
 				 (round-coordinate (- center-y radius-2-dy))
 				 (round-coordinate (+ center-x radius-1-dx))
 				 (round-coordinate (+ center-y radius-2-dy)))
-	  (w32api.gdi32::ArcTo (w32-medium-dc medium)
-			       (round-coordinate (- center-x radius-1-dx))
-			       (round-coordinate (- center-y radius-2-dy))
-			       (round-coordinate (+ center-x radius-1-dx))
-			       (round-coordinate (+ center-y radius-2-dy))
-			       (round-coordinate (* (+ center-x radius-1-dx) (cos start-angle)))
-			       (round-coordinate (* (+ center-y radius-2-dy) (sin start-angle)))
-			       (round-coordinate (* (+ center-x radius-1-dx) (cos end-angle)))
-			       (round-coordinate (* (+ center-y radius-2-dy) (sin end-angle))))))))
+	  (flet ((ellipse-x (angle)
+		   (let ((ca (cos angle)))
+		     (* radius-1-dx radius-2-dy
+			(cond ((> ca 0) 1)
+			      (t -1))
+			(/ (sqrt (+ (expt (* radius-1-dx (tan angle)) 2)
+				    (expt radius-2-dy 2)))))))
+		 (ellipse-y (ellipse-x angle)
+		   (* -1 (tan angle) ellipse-x)))
+	    (let* ((start-x (ellipse-x start-angle))
+		   (start-y (ellipse-y start-x start-angle))
+		   (end-x (ellipse-x end-angle))
+		   (end-y (ellipse-y end-x end-angle)))
+	      (if filled
+		  (progn
+		    (w32api.gdi32::BeginPath (w32-medium-dc medium))
+		    (w32api.gdi32::Arc (w32-medium-dc medium)
+				       (round-coordinate (- center-x radius-1-dx))
+				       (round-coordinate (- center-y radius-2-dy))
+				       (round-coordinate (+ center-x radius-1-dx))
+				       (round-coordinate (+ center-y radius-2-dy))
+				       (round-coordinate (+ center-x start-x))
+				       (round-coordinate (+ center-y start-y))
+				       (round-coordinate (+ center-x end-x))
+				       (round-coordinate (+ center-y end-y)))
+		    (w32api.gdi32::EndPath (w32-medium-dc medium))
+		    (w32api.gdi32::StrokeAndFillPath (w32-medium-dc medium)))
+		  (w32api.gdi32::Arc (w32-medium-dc medium)
+				     (round-coordinate (- center-x radius-1-dx))
+				     (round-coordinate (- center-y radius-2-dy))
+				     (round-coordinate (+ center-x radius-1-dx))
+				     (round-coordinate (+ center-y radius-2-dy))
+				     (round-coordinate (+ center-x start-x))
+				     (round-coordinate (+ center-y start-y))
+				     (round-coordinate (+ center-x end-x))
+				     (round-coordinate (+ center-y end-y)))))))
 
-(defmethod medium-draw-circle* ((medium w32-medium)
-				center-x center-y radius start-angle end-angle
-				filled)
-  (medium-draw-ellipse* medium center-x center-y radius 0 0 radius start-angle end-angle filled))
+      (defmethod medium-draw-circle* ((medium w32-medium)
+				      center-x center-y radius start-angle end-angle
+				      filled)
+	(medium-draw-ellipse* medium center-x center-y radius 0 0 radius start-angle end-angle filled)))))
 
 (defmethod text-style-ascent (text-style (medium w32-medium))
   (w32api::with-drawing-object ((w32-medium-dc medium) (when text-style (text-style-mapping (port (medium-sheet medium)) text-style)))
