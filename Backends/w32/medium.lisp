@@ -138,22 +138,42 @@
     (medium-draw-line* medium x1 y1 x2 y2)))
 
 (defmethod medium-draw-polygon* ((medium w32-medium) coord-seq closed filled)
-  (declare (ignore coord-seq closed filled))
-  nil)
+  (let ((pair-seq (loop for (x y)
+		     on (map 'list #'identity coord-seq);hack: when do record output, it seems coor-seq might be vector
+		     by #'cddr
+		     collect (list (round-coordinate x)
+				   (round-coordinate y)))))
+    (w32api.type::with-points ((points count) pair-seq)
+      (if (or closed filled)
+	  (multiple-value-bind (r g b)
+	      (medium-rgb medium (medium-ink medium))
+	    (w32api::with-drawing-object ((w32-medium-dc medium)
+					  (if filled
+					      (w32api::create-brush :color (list (round-coordinate (* 255 r))
+										 (round-coordinate (* 255 g))
+										 (round-coordinate (* 255 b))))
+					      (w32api::get-stock-object :NULL_BRUSH))
+					  :delete-p t)
+	      (w32api.gdi32::Polygon (w32-medium-dc medium) points count)))
+	  (w32api.gdi32::Polyline (w32-medium-dc medium) points count)))))
 
 (defmethod medium-draw-rectangle* ((medium w32-medium) x1 y1 x2 y2 filled)
   (multiple-value-bind (r g b)
       (medium-rgb medium (medium-ink medium))
-    (w32api::with-drawing-object ((w32-medium-dc medium) (if filled
-							     (w32api::create-brush :color (list (round-coordinate (* 255 r))
-												(round-coordinate (* 255 g))
-												(round-coordinate (* 255 b))))
-							     (w32api::get-stock-object :NULL_BRUSH)) :delete-p t)
-      (w32api.gdi32::Rectangle (w32-medium-dc medium) (round-coordinate x1) (round-coordinate y1) (round-coordinate x2) (round-coordinate y2)))))
+    (w32api::with-drawing-object ((w32-medium-dc medium)
+				  (if filled
+				      (w32api::create-brush :color (list (round-coordinate (* 255 r))
+									 (round-coordinate (* 255 g))
+									 (round-coordinate (* 255 b))))
+				      (w32api::get-stock-object :NULL_BRUSH))
+				  :delete-p t)
+      (w32api.gdi32::Rectangle (w32-medium-dc medium)
+			       (round-coordinate x1) (round-coordinate y1)
+			       (round-coordinate x2) (round-coordinate y2)))))
 
 (defmethod medium-draw-rectangles* ((medium w32-medium) position-seq filled)
-  (loop for (left top right bottom) on position-seq by #'cddddr
-     do (medium-draw-rectangle* medium left top right bottom filled)))
+  (climi::do-sequence ((left top right bottom) position-seq)
+    (medium-draw-rectangle* medium left top right bottom filled)))
 
 (defmethod medium-draw-ellipse* ((medium w32-medium) center-x center-y
 				 radius-1-dx radius-1-dy
@@ -280,6 +300,7 @@
 			  (round-coordinate bottom)))
 
 (defmethod medium-beep ((medium w32-medium))
+  (declare (ignore medium))
   nil)
 
 (defmethod invoke-with-special-choices (continuation (medium w32-medium))
