@@ -251,10 +251,10 @@
 	 (text-style (or text-style (medium-text-style medium))))
     (values-list
      (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
-       (cond ((= start end) (values 0 0 0 0 0))
+       (cond ((= start end) (list 0 0 0 0 0))
 	     (t
 	      (let ((position-newline (position #\newline string :start start :end end)))
-		(cond ((not (null position-newline))
+		(cond ((numberp position-newline)
 		       (multiple-value-bind (cx cy)
 			   (w32api::get-text-extent (w32-medium-dc medium) (subseq string start position-newline))
 			 (multiple-value-bind (w h x y baseline)
