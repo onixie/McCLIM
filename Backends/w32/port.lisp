@@ -181,9 +181,9 @@
 	 (multiple-value-bind (button modifier-state)
 	     (get-mouse-state wParam)
 	   (climi::event-queue-append (w32-port-events port)
-				      (make-instance (if (w32api::key-pressed-p lParam)
-							 'pointer-button-press-event
-							 'pointer-button-release-event)
+				      (make-instance (case Msg
+						       ((:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN) 'pointer-button-press-event)
+						       (t 'pointer-button-release-event))
 						     :pointer 0
 						     :button button
 						     :x (w32api::get-cursor-x lParam)
