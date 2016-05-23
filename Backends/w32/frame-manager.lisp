@@ -51,3 +51,12 @@
 	 (mirror (sheet-direct-mirror sheet)))
     (when (sheet-enabled-p sheet)
       (w32api:show-window mirror))))
+
+(defmethod adopt-frame :before ((fm w32-frame-manager) (frame climi::menu-frame))
+  ;; Temporary kludge.
+  (when (eq (slot-value frame 'climi::top) nil)
+    (multiple-value-bind (x y)
+        (w32api::get-cursor-position (w32-port-window (port fm)))
+      (incf x 10)
+      (setf (slot-value frame 'climi::left) x
+            (slot-value frame 'climi::top) y))))

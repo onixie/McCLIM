@@ -250,9 +250,9 @@
 	 (end (or end (length string)))
 	 (text-style (or text-style (medium-text-style medium))))
     (values-list
-     (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
-       (cond ((= start end) (list 0 0 0 0 0))
-	     (t
+     (cond ((or (not (w32-medium-dc medium)) (= start end)) (list 0 0 0 0 0))
+	   (t
+	    (w32api::with-drawing-object ((w32-medium-dc medium) (text-style-mapping (port (medium-sheet medium)) text-style))
 	      (let ((position-newline (position #\newline string :start start :end end)))
 		(cond ((numberp position-newline)
 		       (multiple-value-bind (cx cy)

@@ -255,6 +255,19 @@
 			:width (round-coordinate (space-requirement-width q))
 			:height (round-coordinate (space-requirement-height q)))))
 
+(defmethod realize-mirror ((port w32-port) (sheet climi::menu-unmanaged-top-level-sheet-pane))
+  (let ((q (compose-space sheet)))
+    (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet))
+			:style nil
+			:extended-style nil
+			:desktop (w32-port-desktop port)
+			:width (round-coordinate (space-requirement-width q))
+			:height (round-coordinate (space-requirement-height q)))))
+
+(defmethod realize-mirror :after ((port w32-port) (sheet climi::menu-unmanaged-top-level-sheet-pane))
+  (let ((window (sheet-mirror sheet)))
+    (w32api.user32::SetWindowPos window :HWND_TOPMOST 0 0 0 0 '(:SWP_NOMOVE :SWP_NOSIZE))))
+
 (defmethod realize-mirror :after ((port w32-port) (sheet climi::top-level-sheet-pane))
   (let ((window (sheet-mirror sheet)))
     (w32api::raise-window window)
