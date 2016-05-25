@@ -177,7 +177,7 @@
        window '(:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN
 		:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP)
        (lambda (hWnd Msg wParam lParam)
-	 (declare (ignore hWnd Msg))
+	 (declare (ignore hWnd))
 	 (multiple-value-bind (button modifier-state)
 	     (get-mouse-state wParam)
 	   (climi::event-queue-append (w32-port-events port)
@@ -240,14 +240,18 @@
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
   (realize-mirror-aux port sheet (format nil "~a" sheet)
 		      :show-p t
-		      :style nil
+		      :style '(:WS_CLIPCHILDREN :WS_CLIPSIBLINGS)
 		      :extended-style nil
 		      :desktop (w32-port-desktop port)
 		      :parent  (sheet-mirror (sheet-mirrored-ancestor (sheet-parent sheet)))))
 
 (defmethod realize-mirror :after ((port w32-port) (sheet sheet-with-medium-mixin))
   (let ((window (sheet-mirror sheet)))
-    (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window))))
+    (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window :full t))))
+
+(defmethod realize-mirror :after ((port w32-port) (sheet clim-stream-pane))
+  (let ((window (sheet-mirror sheet)))
+    (w32api:message-handler+ window :WM_ERASEBKGND (w32api::proc 1))))
 
 (defmethod realize-mirror ((port w32-port) (sheet climi::top-level-sheet-pane))
   (let ((q (compose-space sheet)))
