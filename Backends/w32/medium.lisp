@@ -51,8 +51,11 @@
 			     from-x from-y width height
                              (to-drawable w32-medium)
 			     to-x to-y)
-  (declare (ignore from-x from-y width height to-x to-y))
-  nil)
+  (let ((src-dc (w32-medium-dc from-drawable))
+	(dst-dc (w32-medium-dc to-drawable)))
+      (w32api::with-buffering (copy-dc src-dc :dont-draw-back-p t)
+	(w32api.gdi32::BitBlt copy-dc 0 0 width height src-dc from-x from-y :SRCCOPY)
+	(w32api.gdi32::BitBlt dst-dc to-x to-y width height copy-dc 0 0 :SRCCOPY))))
 
 #+nil ; FIXME: PIXMAP class
 (progn
