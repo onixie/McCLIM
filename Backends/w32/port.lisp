@@ -172,7 +172,8 @@
 				      (make-instance 'climi::window-repaint-event
 						     :sheet sheet
 						     :region (make-rectangle* x1 y1 x2 y2)
-						     :timestamp (get-universal-time))))))
+						     :timestamp (get-universal-time))))
+	 0))
       (w32api:message-handler+
        window '(:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN
 		:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP)
@@ -234,7 +235,9 @@
 	 (climi::event-queue-append (w32-port-events port)
 				    (make-instance 'climi::window-destroy-event
 						   :sheet sheet))
-	 (w32api::post-quit-message 0)))))
+	 (w32api::post-quit-message 0)))
+      (unless (subtypep (type-of sheet) 'climi::composite-pane )
+	(w32api:message-handler+ window :WM_ERASEBKGND (w32api::proc 1)))))
   (climi::port-lookup-mirror port sheet))
 
 (defmethod realize-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
