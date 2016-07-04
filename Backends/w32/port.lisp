@@ -146,13 +146,13 @@
 			  :x (if (climi::%sheet-mirror-transformation sheet)
 				 (round-coordinate (nth-value 0 (transform-position
 								 (climi::%sheet-mirror-transformation sheet)
-								 0 0)))
-				 (getf args :x))
+								 (getf args :x 0) 0)))
+				 (getf args :x 0))
 			  :y (if (climi::%sheet-mirror-transformation sheet)
 				 (round-coordinate (nth-value 1 (transform-position
 								 (climi::%sheet-mirror-transformation sheet)
-								 0 0)))
-				 (getf args :y))
+								 0 (getf args :y 0))))
+				 (getf args :y 0))
 			  :width (if (climi::%sheet-mirror-region sheet)
 				     (round-coordinate (climi::bounding-rectangle-width (climi::%sheet-mirror-region sheet)))
 				     (getf args :width))
@@ -176,15 +176,18 @@
 	 0))
       (w32api:message-handler+
        window '(:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN
-		:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP)
+		:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP
+		:WM_MOUSEMOVE)
        (lambda (hWnd Msg wParam lParam)
 	 (declare (ignore hWnd))
+	 (setf (climi::port-pointer-sheet port) sheet)
 	 (multiple-value-bind (button modifier-state)
 	     (get-mouse-state wParam)
 	   (climi::event-queue-append (w32-port-events port)
 				      (make-instance (case Msg
 						       ((:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN) 'pointer-button-press-event)
-						       (t 'pointer-button-release-event))
+						       ((:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP) 'pointer-button-release-event)
+						       (:WM_MOUSEMOVE 'pointer-motion-event))
 						     :pointer 0
 						     :button button
 						     :x (w32api::get-cursor-x lParam)
@@ -266,15 +269,17 @@
 (defmethod realize-mirror ((port w32-port) (sheet climi::menu-unmanaged-top-level-sheet-pane))
   (let ((q (compose-space sheet)))
     (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet))
-			:style nil
-			:extended-style nil
+			:style '(:WS_POPUP :WS_SYSMENU)
+			:extended-style '(:WS_EX_TOOLWINDOW)
 			:desktop (w32-port-desktop port)
 			:width (round-coordinate (space-requirement-width q))
 			:height (round-coordinate (space-requirement-height q)))))
 
-(defmethod realize-mirror :after ((port w32-port) (sheet climi::menu-unmanaged-top-level-sheet-pane))
-  (let ((window (sheet-mirror sheet)))
-    (w32api.user32::SetWindowPos window :HWND_TOPMOST 0 0 0 0 '(:SWP_NOMOVE :SWP_NOSIZE))))
+(defmethod adopt-frame :before ((fm frame-manager) (frame climi::menu-frame))
+  (multiple-value-bind (x y)
+      (w32api::get-cursor-position)
+    (setf (slot-value frame 'climi::left) x)
+    (setf (slot-value frame 'climi::top) y)))
 
 (defmethod realize-mirror :after ((port w32-port) (sheet climi::top-level-sheet-pane))
   (let ((window (sheet-mirror sheet)))
@@ -435,7 +440,12 @@
     (destroy-mirror port pixmap)))
 
 (defmethod pointer-position ((pointer w32-pointer))
-  (values (w32-pointer-x pointer) (w32-pointer-y pointer)))
+  (let* ((port (port pointer))
+	 (sheet (climi::port-pointer-sheet port)))
+    (when sheet
+      (multiple-value-bind (x y)
+	  (w32api::get-cursor-position (sheet-mirror sheet))
+	(untransform-position (sheet-native-transformation sheet) x y)))))
 
 (defmethod pointer-button-state ((pointer w32-pointer))
   nil)
