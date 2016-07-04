@@ -250,7 +250,8 @@
 
 (defmethod realize-mirror :after ((port w32-port) (sheet sheet-with-medium-mixin))
   (let ((window (sheet-mirror sheet)))
-    (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window :full t))))
+    (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window :full t))
+    (change-space-requirements sheet)))
 
 (defmethod realize-mirror :after ((port w32-port) (sheet clim-stream-pane))
   (let ((window (sheet-mirror sheet)))
