@@ -264,7 +264,7 @@
 				    (make-instance 'climi::window-destroy-event
 						   :sheet sheet))
 	 (w32api::post-quit-message 0)))
-      (unless (subtypep (type-of sheet) 'climi::composite-pane )
+      (when (subtypep (type-of sheet) 'sheet-with-medium-mixin)
 	(w32api:message-handler+ window :WM_ERASEBKGND (w32api::proc 1)))))
   (climi::port-lookup-mirror port sheet))
 
