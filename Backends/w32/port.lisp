@@ -180,23 +180,48 @@
 		:WM_MOUSEMOVE)
        (lambda (hWnd Msg wParam lParam)
 	 (declare (ignore hWnd))
-	 (setf (climi::port-pointer-sheet port) sheet)
-	 (multiple-value-bind (button modifier-state)
-	     (get-mouse-state wParam)
-	   (climi::event-queue-append (w32-port-events port)
-				      (make-instance (case Msg
-						       ((:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN) 'pointer-button-press-event)
-						       ((:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP) 'pointer-button-release-event)
-						       (:WM_MOUSEMOVE 'pointer-motion-event))
-						     :pointer 0
-						     :button button
-						     :x (w32api::get-cursor-x lParam)
-						     :y (w32api::get-cursor-y lParam)
-						     :graft-x 0
-						     :graft-y 0
-						     :sheet sheet
-						     :modifier-state modifier-state
-						     :timestamp (get-universal-time))))))
+	 (let ((old-sheet (climi::port-pointer-sheet port)))
+	   (setf (climi::port-pointer-sheet port) sheet)
+	   (multiple-value-bind (button modifier-state)
+	       (get-mouse-state wParam)
+	     (climi::event-queue-append (w32-port-events port)
+					(make-instance (case Msg
+							 ((:WM_LBUTTONDOWN :WM_MBUTTONDOWN :WM_RBUTTONDOWN) 'pointer-button-press-event)
+							 ((:WM_LBUTTONUP :WM_MBUTTONUP :WM_RBUTTONUP) 'pointer-button-release-event)
+							 (:WM_MOUSEMOVE 'pointer-motion-event))
+						       :pointer 0
+						       :button button
+						       :x (w32api::get-cursor-x lParam)
+						       :y (w32api::get-cursor-y lParam)
+						       :graft-x 0
+						       :graft-y 0
+						       :sheet sheet
+						       :modifier-state modifier-state
+						       :timestamp (get-universal-time)))
+	     (unless (eq sheet old-sheet)
+	       (climi::event-queue-append (w32-port-events port)
+					  (make-instance 'pointer-enter-event
+							 :pointer 0
+							 :button button
+							 :x (w32api::get-cursor-x lParam)
+							 :y (w32api::get-cursor-y lParam)
+							 :graft-x 0
+							 :graft-y 0
+							 :sheet sheet
+							 :modifier-state modifier-state
+							 :timestamp (get-universal-time)))
+	       (when old-sheet
+		 (climi::event-queue-append (w32-port-events port)
+					    (make-instance 'pointer-exit-event
+							   :pointer 0
+							   :button button
+							   :x (w32api::get-cursor-x lParam)
+							   :y (w32api::get-cursor-y lParam)
+							   :graft-x 0
+							   :graft-y 0
+							   :sheet old-sheet
+							   :modifier-state modifier-state
+							   :timestamp (get-universal-time)))))))))
       
       (w32api:message-handler+
        window :WM_CHAR
