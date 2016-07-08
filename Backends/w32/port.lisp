@@ -130,7 +130,7 @@
      (cond ((member :MK_LBUTTON modifier-keys) +pointer-left-button+)
 	   ((member :MK_MBUTTON modifier-keys) +pointer-middle-button+)
 	   ((member :MK_RBUTTON modifier-keys) +pointer-right-button+)
-	   (t +pointer-left-button+))
+	   (t nil))
      (logior
       (if (member :MK_SHIFT modifier-keys) +shift-key+ 0)
       (if (member :MK_CONTROL modifier-keys) +control-key+ 0)
@@ -221,7 +221,18 @@
 							   :graft-y 0
 							   :sheet old-sheet
 							   :modifier-state modifier-state
-							   :timestamp (get-universal-time)))))))))
+							   :timestamp (get-universal-time)))
+		 (when button
+		   (make-instance 'pointer-button-release-event
+				  :pointer 0
+				  :button button
+				  :x (w32api::get-cursor-x lParam)
+				  :y (w32api::get-cursor-y lParam)
+				  :graft-x 0
+				  :graft-y 0
+				  :sheet old-sheet
+				  :modifier-state modifier-state
+				  :timestamp (get-universal-time)))))))))
       
       (w32api:message-handler+
        window :WM_CHAR
