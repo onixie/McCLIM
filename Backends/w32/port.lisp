@@ -302,7 +302,12 @@
 (defmethod realize-mirror :after ((port w32-port) (sheet climi::top-level-sheet-pane))
   (let ((window (sheet-mirror sheet)))
     (w32api::raise-window window)
-    (w32api::active-window window)))
+    (w32api::raise-window window); I dont know why, but twice make works
+    (let ((monitor (w32api::get-window-monitor (w32api::get-desktop-window))))
+      (multiple-value-bind (left top right bottom)
+	  (w32api::get-monitor-rectangle monitor :rcWork)
+	(declare (ignore right bottom))
+	(move-sheet sheet left top)))))
 
 (defmethod destroy-mirror ((port w32-port) (sheet mirrored-sheet-mixin))
   (when (climi::port-lookup-mirror port sheet)
