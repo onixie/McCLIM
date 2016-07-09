@@ -44,8 +44,20 @@
     (w32api.gdi32::SelectObject (w32-medium-dc medium) (w32-medium-font medium))))
 
 (defmethod (setf medium-clipping-region) :after (region (medium w32-medium))
-  (declare (ignore region))
-  nil)
+  (when (w32-medium-dc medium)
+    (if (eq region +everywhere+)
+	(w32api.gdi32::SelectClipRgn (w32-medium-dc medium) (cffi::null-pointer))
+	(let ((region (region-difference (sheet-region (medium-sheet medium)) region)))
+	  (map-over-region-set-regions
+	   (lambda (region)
+	     (multiple-value-bind (left top right bottom)
+		 (bounding-rectangle* region)
+	       (w32api.gdi32::ExcludeClipRect (w32-medium-dc medium)
+					      (round-coordinate left)
+					      (round-coordinate top)
+					      (round-coordinate right)
+					      (round-coordinate bottom))))
+	   region)))))
 
 (defmethod medium-copy-area ((from-drawable w32-medium)
 			     from-x from-y width height
@@ -136,9 +148,10 @@
 
 (defmethod medium-draw-line* ((medium w32-medium) x1 y1 x2 y2)
   (when (w32-medium-dc medium)
-    (w32api.type::with-points ((points) (list (list (round-coordinate x1) (round-coordinate y1))
-					      (list (round-coordinate x2) (round-coordinate y2))))
-      (w32api::PolyLine (w32-medium-dc medium) points 2))))
+    (with-drawing-context (medium)
+      (w32api.type::with-points ((points) (list (list (round-coordinate x1) (round-coordinate y1))
+						(list (round-coordinate x2) (round-coordinate y2))))
+	(w32api::PolyLine (w32-medium-dc medium) points 2)))))
 
 ;; FIXME: Invert the transformation and apply it here, as the :around
 ;; methods on transform-coordinates-mixin will cause it to be applied
