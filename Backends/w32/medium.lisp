@@ -335,11 +335,17 @@
     ((medium w32-medium) (design climi::bezier-difference))
   nil)
 
+(defmethod draw-background ((sheet sheet-with-medium-mixin) (medium w32-medium))
+  (multiple-value-bind (width height)
+      (w32api::get-window-size (sheet-mirror sheet))
+    (draw-rectangle* medium 0 0 width height :filled t :ink (medium-background sheet))))
+
 (defmethod climi::medium-invoke-with-possible-double-buffering (frame pane (medium w32-medium) continuation)
   (if (climi::pane-double-buffering pane)
       (let ((dc (w32-medium-dc medium)))
 	(w32api::with-buffering (buffer-dc dc)
 	  (setf (w32-medium-dc medium) buffer-dc)
+	  (draw-background pane medium)
 	  (funcall continuation)
 	  (setf (w32-medium-dc medium) dc)))))
 

@@ -292,10 +292,6 @@
     (setf (w32-medium-dc (sheet-medium sheet)) (w32api:get-drawing-context window :full t))
     (change-space-requirements sheet)))
 
-(defmethod realize-mirror :after ((port w32-port) (sheet clim-stream-pane))
-  (let ((window (sheet-mirror sheet)))
-    (w32api:message-handler+ window :WM_ERASEBKGND (w32api::proc 1))))
-
 (defmethod realize-mirror ((port w32-port) (sheet climi::top-level-sheet-pane))
   (let ((q (compose-space sheet)))
     (realize-mirror-aux port sheet (frame-pretty-name (pane-frame sheet)) :desktop (w32-port-desktop port)
