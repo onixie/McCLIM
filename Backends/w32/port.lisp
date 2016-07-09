@@ -340,6 +340,16 @@
   (declare (ignore region))
   nil)
 
+(defmethod note-sheet-region-changed :after ((sheet climi::box-layout-mixin))
+  (map-over-sheets
+   (lambda (child)
+     (unless (eq child sheet)
+       (let ((region (sheet-region child)))
+	 (resize-sheet child
+		       (bounding-rectangle-width region)
+		       (bounding-rectangle-height region)))))
+   sheet))
+
 (defmethod port-enable-sheet ((port w32-port) (mirror mirrored-sheet-mixin))
   (w32api:show-window mirror))
 
