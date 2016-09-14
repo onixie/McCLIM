@@ -355,7 +355,7 @@
     (draw-rectangle* medium 0 0 width height :filled t :ink (medium-background sheet))))
 
 (defmethod climi::medium-invoke-with-possible-double-buffering (frame pane (medium w32-medium) continuation)
-  (if (climi::pane-double-buffering pane)
+  (if (pane-double-buffering pane)
       (let ((dc (w32-medium-dc medium)))
 	(w32api::with-buffering (buffer-dc dc)
 	  (setf (w32-medium-dc medium) buffer-dc)
@@ -363,7 +363,11 @@
 	  (funcall continuation)
 	  (setf (w32-medium-dc medium) dc)))))
 
-(defmethod climi::pane-double-buffering :around ((pane sheet-with-medium-mixin))
+(defmethod pane-double-buffering (pane)
+  (declare (ignore pane))
+  nil)
+
+(defmethod pane-double-buffering :around ((pane sheet-with-medium-mixin))
   (declare (ignore pane))
   t)
 

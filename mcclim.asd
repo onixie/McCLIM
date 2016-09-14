@@ -60,11 +60,11 @@ interface management system."
 ;;; platform.
 (defsystem #:mcclim/looks
   :depends-on (#:clim
-               #-(or mcclim-beagle mcclim-ugly)
+               #-(or mcclim-beagle mcclim-ugly mcclim-w32)
                                 #:mcclim-clx/pretty  #| adds truetype        |#
                #+mcclim-ugly    #:mcclim-clx         #| raw clim-clx backend |#
                #+mcclim-beagle  #:mcclim-beagle      #| OSX native (clozure) |#
-
+	       #+mcclim-w32     #:mcclim-w32
                ;; null backend
                #:mcclim-null))
 
