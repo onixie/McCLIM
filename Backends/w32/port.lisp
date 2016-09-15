@@ -27,7 +27,7 @@
    (y :initform 0
       :accessor w32-pointer-y)))
 
-(defclass w32-port (basic-port)
+(defclass w32-port (clim-standard::standard-event-port-mixin clim-standard::standard-port)
   ((desktop :initform nil
 	    :accessor w32-port-desktop)
    (monitor :initform nil
@@ -125,25 +125,25 @@
 
 (defun realize-mirror-aux (port sheet &rest args)
   (when (null (climi::port-lookup-mirror port sheet))
-    (climi::update-mirror-geometry sheet)
+    (clim-standard::%update-mirror-geometry sheet)
     (let* ((name (first args))
 	   (args (rest  args))
 	   (window (apply #'w32api:create-window name
-			  :x (if (climi::%sheet-mirror-transformation sheet)
+			  :x (if (clim-standard::%sheet-mirror-transformation sheet)
 				 (round-coordinate (nth-value 0 (transform-position
-								 (climi::%sheet-mirror-transformation sheet)
+								 (clim-standard::%sheet-mirror-transformation sheet)
 								 (getf args :x 0) 0)))
 				 (getf args :x 0))
-			  :y (if (climi::%sheet-mirror-transformation sheet)
+			  :y (if (clim-standard::%sheet-mirror-transformation sheet)
 				 (round-coordinate (nth-value 1 (transform-position
-								 (climi::%sheet-mirror-transformation sheet)
+								 (clim-standard::%sheet-mirror-transformation sheet)
 								 0 (getf args :y 0))))
 				 (getf args :y 0))
-			  :width (if (climi::%sheet-mirror-region sheet)
-				     (round-coordinate (climi::bounding-rectangle-width (climi::%sheet-mirror-region sheet)))
+			  :width (if (clim-standard::%sheet-mirror-region sheet)
+				     (round-coordinate (climi::bounding-rectangle-width (clim-standard::%sheet-mirror-region sheet)))
 				     (getf args :width))
-			  :height (if (climi::%sheet-mirror-region sheet)
-				      (round-coordinate (climi::bounding-rectangle-height (climi::%sheet-mirror-region sheet)))
+			  :height (if (clim-standard::%sheet-mirror-region sheet)
+				      (round-coordinate (climi::bounding-rectangle-height (clim-standard::%sheet-mirror-region sheet)))
 				      (getf args :height))
 			  args)))
       (climi::port-register-mirror (port sheet) sheet window)

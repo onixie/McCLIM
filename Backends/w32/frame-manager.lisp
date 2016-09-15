@@ -22,25 +22,52 @@
 (defclass w32-frame-manager (frame-manager)
   ())
 
+(defun maybe-mirroring (concrete-pane-class)
+  (when (and (not (subtypep concrete-pane-class 'mirrored-sheet-mixin))
+	     (subtypep concrete-pane-class 'basic-pane))
+    (let* ((concrete-pane-class-symbol (if (typep concrete-pane-class 'class)
+					   (class-name concrete-pane-class)
+					   concrete-pane-class))
+	   (concrete-mirrored-pane-class (concatenate 'string
+						      "W32-"
+						      (symbol-name concrete-pane-class-symbol)
+						      "-DUMMY"))
+	   (concrete-mirrored-pane-class-symbol (find-symbol concrete-mirrored-pane-class
+							     :clim-w32)))
+      #+(or) (format *debug-io* "use dummy mirrored class ~A~%" concrete-mirrored-pane-class)
+      (unless concrete-mirrored-pane-class-symbol
+	(setf concrete-mirrored-pane-class-symbol
+	      (intern concrete-mirrored-pane-class :clim-w32))
+	(eval
+	 `(defclass ,concrete-mirrored-pane-class-symbol
+	      (clim-standard::standard-mirrored-sheet-mixin
+	       ,concrete-pane-class-symbol)
+	    ()
+	    (:metaclass ,(type-of (find-class concrete-pane-class-symbol))))))
+      #+(or) (format *debug-io* "create class ~A~%" concrete-mirrored-pane-class-symbol)
+      (setf concrete-pane-class (find-class concrete-mirrored-pane-class-symbol))))
+  concrete-pane-class)
+
 ;;; This is an example of how make-pane-1 might create specialized instances of the
 ;;; generic pane types based upon the type of the frame-manager. Unlike in the CLX
 ;;; case, we *do* expect there to be W32 specific panes (eventually!).
 (defmethod make-pane-1 ((fm w32-frame-manager) (frame application-frame) type &rest initargs)
   (apply #'make-instance
-	 (or (find-symbol (concatenate 'string
-				       (symbol-name '#:w32-)
-				       (symbol-name type))
-			  :clim-w32)
-	     (find-symbol (concatenate 'string
-				       (symbol-name '#:w32-)
-				       (symbol-name type)
-				       (symbol-name '#:-pane))
-			  :clim-w32)
-	     (find-symbol (concatenate 'string
-				       (symbol-name type)
-				       (symbol-name '#:-pane))
-			  :climi)
-	     type)
+	 (maybe-mirroring
+	  (or (find-symbol (concatenate 'string
+					(symbol-name '#:w32-)
+					(symbol-name type))
+			   :clim-w32)
+	      (find-symbol (concatenate 'string
+					(symbol-name '#:w32-)
+					(symbol-name type)
+					(symbol-name '#:-pane))
+			   :clim-w32)
+	      (find-symbol (concatenate 'string
+					(symbol-name type)
+					(symbol-name '#:-pane))
+			   :climi)
+	      type))
 	 :frame frame
 	 :manager fm
 	 :port (port frame)

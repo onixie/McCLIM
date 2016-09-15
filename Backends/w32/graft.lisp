@@ -19,7 +19,7 @@
 
 (in-package :clim-w32)
 
-(defclass w32-graft (graft)
+(defclass w32-graft (clim-standard::standard-graft)
   ())
 
 (defmethod graft-width ((graft w32-graft) &key (units :device))
