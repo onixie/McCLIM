@@ -31,7 +31,7 @@
 	   (concrete-mirrored-pane-class (concatenate 'string
 						      "W32-"
 						      (symbol-name concrete-pane-class-symbol)
-						      "-DUMMY"))
+						      (symbol-name (gensym "-MIRRORED"))))
 	   (concrete-mirrored-pane-class-symbol (find-symbol concrete-mirrored-pane-class
 							     :clim-w32)))
       #+(or) (format *debug-io* "use dummy mirrored class ~A~%" concrete-mirrored-pane-class)
@@ -40,8 +40,10 @@
 	      (intern concrete-mirrored-pane-class :clim-w32))
 	(eval
 	 `(defclass ,concrete-mirrored-pane-class-symbol
-	      (clim-standard::standard-mirrored-sheet-mixin
-	       ,concrete-pane-class-symbol)
+	      ,(list* 'clim-standard::standard-multi-mirrored-sheet-mixin
+		      concrete-pane-class-symbol
+		      (when (subtypep concrete-pane-class 'climi::top-level-sheet-pane)
+			'(clim-internals::permanent-medium-sheet-output-mixin)))
 	    ()
 	    (:metaclass ,(type-of (find-class concrete-pane-class-symbol))))))
       #+(or) (format *debug-io* "create class ~A~%" concrete-mirrored-pane-class-symbol)
