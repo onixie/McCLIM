@@ -42,7 +42,11 @@
 	 `(defclass ,concrete-mirrored-pane-class-symbol
 	      ,(list* 'clim-standard::standard-multi-mirrored-sheet-mixin
 		      concrete-pane-class-symbol
-		      (when (subtypep concrete-pane-class 'climi::top-level-sheet-pane)
+		      (when (or
+			     (subtypep concrete-pane-class 'climi::top-level-sheet-pane)
+			     (subtypep concrete-pane-class 'climi::scroller-pane)
+			     (subtypep concrete-pane-class 'climi::viewport-pane)
+			     (subtypep concrete-pane-class 'climi::table-pane))
 			'(clim-internals::permanent-medium-sheet-output-mixin)))
 	    ()
 	    (:metaclass ,(type-of (find-class concrete-pane-class-symbol))))))
